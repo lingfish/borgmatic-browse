@@ -49,6 +49,9 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.version.raw-options]
+# Make git describe ignore any other tags too, rather than finding one and then failing to parse
+# it.
+git_describe_command = "git describe --dirty --tags --long --match '[0-9]*.[0-9]*.[0-9]*'"
 tag_regex = '^(?P<version>\d+\.\d+\.\d+)$'
 local_scheme = "no-local-version"
 
