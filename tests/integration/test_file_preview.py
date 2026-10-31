@@ -1,11 +1,11 @@
 import textual.widgets.option_list
 from flexmock import flexmock
 
-from borgmatic.actions.browse import file_preview as module
+from borgmatic_browse import file_preview as module
 
 
 def test_file_preview_does_not_raise():
-    flexmock(module.borgmatic.actions.browse.loading).should_receive('add_inline_loading_indicator')
+    flexmock(module.borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
 
     module.File_preview(
         config=flexmock(), repository=flexmock(), archive_name='archive', file_path='foo/bar.txt'
@@ -13,8 +13,8 @@ def test_file_preview_does_not_raise():
 
 
 async def test_file_preview_on_mount_does_not_raise():
-    flexmock(module.borgmatic.actions.browse.loading).should_receive('add_inline_loading_indicator')
-    flexmock(module.borgmatic.actions.browse.workers).should_receive('load_file_preview')
+    flexmock(module.borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    flexmock(module.borgmatic_browse.workers).should_receive('load_file_preview')
     file_preview = module.File_preview(
         config=flexmock(), repository=flexmock(), archive_name='archive', file_path='foo.txt'
     )
@@ -25,7 +25,7 @@ async def test_file_preview_on_mount_does_not_raise():
 
 
 def test_file_preview_on_file_preview_loaded_with_none_file_contents_displays_error():
-    flexmock(module.borgmatic.actions.browse.loading).should_receive(
+    flexmock(module.borgmatic_browse.loading).should_receive(
         'add_inline_loading_indicator'
     ).and_return(flexmock(stop=lambda: None))
     file_preview = module.File_preview(
@@ -39,7 +39,7 @@ def test_file_preview_on_file_preview_loaded_with_none_file_contents_displays_er
 
 
 def test_file_preview_on_file_preview_loaded_with_file_contents_displays_contents():
-    flexmock(module.borgmatic.actions.browse.loading).should_receive(
+    flexmock(module.borgmatic_browse.loading).should_receive(
         'add_inline_loading_indicator'
     ).and_return(flexmock(stop=lambda: None))
     file_preview = module.File_preview(

@@ -3,12 +3,12 @@ import os
 import rich.text
 import textual.widgets
 
-import borgmatic.actions.browse.archive
-import borgmatic.actions.browse.bindings
-import borgmatic.actions.browse.icons
-import borgmatic.actions.browse.loading
-import borgmatic.actions.browse.sizes
-import borgmatic.actions.browse.workers
+import borgmatic_browse.archive
+import borgmatic_browse.bindings
+import borgmatic_browse.icons
+import borgmatic_browse.loading
+import borgmatic_browse.sizes
+import borgmatic_browse.workers
 
 OPTION_SIZE_COLUMN_WIDTH = 10
 
@@ -58,9 +58,9 @@ def make_size_path_prompt(size, path_text):
     rather than in format_size(), since it's purely for this column's layout, and other sizes (like
     those in border titles) shouldn't get a trailing space.
     '''
-    size_text = borgmatic.actions.browse.sizes.format_size(size) if size is not None else ''
+    size_text = borgmatic_browse.sizes.format_size(size) if size is not None else ''
 
-    if size_text.endswith(f' {borgmatic.actions.browse.sizes.SIZE_UNITS[0]}'):
+    if size_text.endswith(f' {borgmatic_browse.sizes.SIZE_UNITS[0]}'):
         size_text += ' '
 
     return rich.text.Text(f'{size_text:>{OPTION_SIZE_COLUMN_WIDTH}}  {path_text}')
@@ -83,12 +83,10 @@ def make_directory_list_option(archive_path, relative_path_components, size):
     '''
     is_leaf = len(relative_path_components) == 1
     path_type = (
-        archive_path.path_type
-        if is_leaf
-        else borgmatic.actions.browse.archive.Path_type.DIRECTORY.value
+        archive_path.path_type if is_leaf else borgmatic_browse.archive.Path_type.DIRECTORY.value
     )
     pieces = (
-        borgmatic.actions.browse.icons.PATH_TYPE_ICONS.get(path_type, '❓'),
+        borgmatic_browse.icons.PATH_TYPE_ICONS.get(path_type, '❓'),
         relative_path_components[0],
     ) + (('→', archive_path.link_target) if is_leaf and archive_path.link_target else ())
 
@@ -96,9 +94,7 @@ def make_directory_list_option(archive_path, relative_path_components, size):
         prompt=make_size_path_prompt(size, ' '.join(pieces)),
         id=relative_path_components[0],
     )
-    option.prompt_text = ' '.join(
-        (*pieces, f'({borgmatic.actions.browse.sizes.format_size(size)})')
-    )
+    option.prompt_text = ' '.join((*pieces, f'({borgmatic_browse.sizes.format_size(size)})'))
     option.path_type = path_type
 
     return option
@@ -156,12 +152,12 @@ def add_archive_paths(
         # A directory's cumulative size lives in the hierarchy rather than in the archive listing,
         # which reports directories themselves as zero-sized.
         size = (
-            borgmatic.actions.browse.workers.get_path_size(
+            borgmatic_browse.workers.get_path_size(
                 directory_list.path_loaded.path_hierarchy,
                 (*directory_list.path_components, option_id),
             )
             if len(relative_path_components) > 1
-            or archive_path.path_type == borgmatic.actions.browse.archive.Path_type.DIRECTORY.value
+            or archive_path.path_type == borgmatic_browse.archive.Path_type.DIRECTORY.value
             else archive_path.size
         )
         option = make_directory_list_option(archive_path, relative_path_components, size)
@@ -204,7 +200,7 @@ class Directory_list(textual.widgets.OptionList):
     Directory_list.
     '''
 
-    BINDINGS = borgmatic.actions.browse.bindings.OPTION_LIST_BINDINGS
+    BINDINGS = borgmatic_browse.bindings.OPTION_LIST_BINDINGS
 
     def __init__(self, config, repository, archive_name, path_loaded=None, path_components=None):
         '''
@@ -231,14 +227,14 @@ class Directory_list(textual.widgets.OptionList):
             parent_option.prompt_text = '📁 ..'
             self.add_option(parent_option)
 
-        self.path_loaded = path_loaded or borgmatic.actions.browse.workers.Archive_path_loaded(
+        self.path_loaded = path_loaded or borgmatic_browse.workers.Archive_path_loaded(
             self, 'archive path loaded'
         )
 
         self.update_border_title()
 
         if not self.path_loaded.complete:
-            self.timer = borgmatic.actions.browse.loading.add_inline_loading_indicator(self)
+            self.timer = borgmatic_browse.loading.add_inline_loading_indicator(self)
 
     def on_mount(self):
         '''
@@ -258,12 +254,12 @@ class Directory_list(textual.widgets.OptionList):
                 config=self.config,
                 repository=self.repository,
                 archive_name=self.archive_name,
-                archive_paths=borgmatic.actions.browse.workers.get_paths(
+                archive_paths=borgmatic_browse.workers.get_paths(
                     self.path_loaded.path_hierarchy, self.path_components
                 ),
             )
         else:
-            borgmatic.actions.browse.workers.load_archive_paths(
+            borgmatic_browse.workers.load_archive_paths(
                 self.app,
                 path_loaded=self.path_loaded,
                 config=self.config,
@@ -279,7 +275,7 @@ class Directory_list(textual.widgets.OptionList):
         displays (or the entire archive, for a root directory list). Skip the update if the title
         hasn't actually changed, since refreshing the border on every loaded path flickers.
         '''
-        size = borgmatic.actions.browse.workers.get_path_size(
+        size = borgmatic_browse.workers.get_path_size(
             self.path_loaded.path_hierarchy, self.path_components
         )
         title = ' '.join(
@@ -288,7 +284,7 @@ class Directory_list(textual.widgets.OptionList):
                 os.path.sep.join(self.path_components)
                 if self.path_components
                 else f'{self.archive_name}',
-                f'({borgmatic.actions.browse.sizes.format_size(size)})',
+                f'({borgmatic_browse.sizes.format_size(size)})',
             )
         )
 
@@ -300,7 +296,7 @@ class Directory_list(textual.widgets.OptionList):
         When a batch of archive paths loads, add them as options to this directory list. But if we
         get a signal that all path loading is complete, stop and remove our loading indicator.
         '''
-        if data is borgmatic.actions.browse.workers.LOADING_DONE:
+        if data is borgmatic_browse.workers.LOADING_DONE:
             self.timer.stop()
             self.remove_option('loading-indicator')
             self.update_border_title()

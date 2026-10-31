@@ -3,12 +3,12 @@ import os
 import textual.binding
 import textual.containers
 
-import borgmatic.actions.browse.archive
-import borgmatic.actions.browse.archives_list
-import borgmatic.actions.browse.configuration_files_list
-import borgmatic.actions.browse.directory_list
-import borgmatic.actions.browse.file_preview
-import borgmatic.actions.browse.repositories_list
+import borgmatic_browse.archive
+import borgmatic_browse.archives_list
+import borgmatic_browse.configuration_files_list
+import borgmatic_browse.directory_list
+import borgmatic_browse.file_preview
+import borgmatic_browse.repositories_list
 
 
 def make_next_panel(focused_panel, option_id):
@@ -21,28 +21,28 @@ def make_next_panel(focused_panel, option_id):
     return None.
     '''
     if isinstance(
-        focused_panel, borgmatic.actions.browse.configuration_files_list.Configuration_files_list
+        focused_panel, borgmatic_browse.configuration_files_list.Configuration_files_list
     ):
-        return borgmatic.actions.browse.repositories_list.Repositories_list(
+        return borgmatic_browse.repositories_list.Repositories_list(
             config=focused_panel.configs[option_id]
         )
 
-    if isinstance(focused_panel, borgmatic.actions.browse.repositories_list.Repositories_list):
-        return borgmatic.actions.browse.archives_list.Archives_list(
+    if isinstance(focused_panel, borgmatic_browse.repositories_list.Repositories_list):
+        return borgmatic_browse.archives_list.Archives_list(
             config=focused_panel.config, repository=focused_panel.repositories[option_id]
         )
 
-    if isinstance(focused_panel, borgmatic.actions.browse.archives_list.Archives_list):
-        return borgmatic.actions.browse.directory_list.Directory_list(
+    if isinstance(focused_panel, borgmatic_browse.archives_list.Archives_list):
+        return borgmatic_browse.directory_list.Directory_list(
             config=focused_panel.config, repository=focused_panel.repository, archive_name=option_id
         )
 
-    if isinstance(focused_panel, borgmatic.actions.browse.directory_list.Directory_list):
+    if isinstance(focused_panel, borgmatic_browse.directory_list.Directory_list):
         option = focused_panel.get_option(option_id)
         path_type = getattr(option, 'path_type', None)
 
-        if path_type == borgmatic.actions.browse.archive.Path_type.DIRECTORY.value:
-            return borgmatic.actions.browse.directory_list.Directory_list(
+        if path_type == borgmatic_browse.archive.Path_type.DIRECTORY.value:
+            return borgmatic_browse.directory_list.Directory_list(
                 focused_panel.config,
                 focused_panel.repository,
                 focused_panel.archive_name,
@@ -50,8 +50,8 @@ def make_next_panel(focused_panel, option_id):
                 path_components=(*focused_panel.path_components, option_id),
             )
 
-        if path_type == borgmatic.actions.browse.archive.Path_type.FILE.value:
-            return borgmatic.actions.browse.file_preview.File_preview(
+        if path_type == borgmatic_browse.archive.Path_type.FILE.value:
+            return borgmatic_browse.file_preview.File_preview(
                 focused_panel.config,
                 focused_panel.repository,
                 focused_panel.archive_name,

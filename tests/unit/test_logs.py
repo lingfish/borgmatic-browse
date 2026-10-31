@@ -1,6 +1,6 @@
 from flexmock import flexmock
 
-from borgmatic.actions.browse import logs as module
+from borgmatic_browse import logs as module
 
 
 def test_rich_color_formatter_format_colors_log_record_based_on_level():

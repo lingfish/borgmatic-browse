@@ -4,8 +4,8 @@ import rich.syntax
 import textual.binding
 import textual.widgets
 
-import borgmatic.actions.browse.loading
-import borgmatic.actions.browse.workers
+import borgmatic_browse.loading
+import borgmatic_browse.workers
 
 logger = logging.getLogger('__name__')
 
@@ -45,11 +45,11 @@ class File_preview(textual.widgets.RichLog):
         super().__init__(classes='panel')
         self.border_title = f'📄 {self.file_path} preview'
         self.auto_scroll = False
-        self.file_preview_loaded = borgmatic.actions.browse.workers.File_preview_loaded(
+        self.file_preview_loaded = borgmatic_browse.workers.File_preview_loaded(
             self, 'file preview loaded'
         )
 
-        self.loading_timer = borgmatic.actions.browse.loading.add_inline_loading_indicator(self)
+        self.loading_timer = borgmatic_browse.loading.add_inline_loading_indicator(self)
 
     def on_mount(self):
         '''
@@ -61,7 +61,7 @@ class File_preview(textual.widgets.RichLog):
         '''
         self.file_preview_loaded.subscribe(self, self.on_file_preview_loaded)
 
-        borgmatic.actions.browse.workers.load_file_preview(
+        borgmatic_browse.workers.load_file_preview(
             self.app,
             file_preview_loaded=self.file_preview_loaded,
             config=self.config,

@@ -4,10 +4,10 @@ import textual.app
 import textual.binding
 import textual.widgets
 
-import borgmatic.actions.browse.carousel
-import borgmatic.actions.browse.configuration_files_list
-import borgmatic.actions.browse.logs
-import borgmatic.actions.browse.repositories_list
+import borgmatic_browse.carousel
+import borgmatic_browse.configuration_files_list
+import borgmatic_browse.logs
+import borgmatic_browse.repositories_list
 
 
 class Browse_app(textual.app.App):
@@ -65,25 +65,21 @@ class Browse_app(textual.app.App):
           * a footer with available keys listed
         '''
         yield textual.widgets.Header()
-        yield borgmatic.actions.browse.carousel.Carousel(
-            [
-                borgmatic.actions.browse.configuration_files_list.Configuration_files_list(
-                    self.configs
-                )
-            ]
+        yield borgmatic_browse.carousel.Carousel(
+            [borgmatic_browse.configuration_files_list.Configuration_files_list(self.configs)]
             if len(self.configs) > 1
             else [
-                borgmatic.actions.browse.repositories_list.Repositories_list(
+                borgmatic_browse.repositories_list.Repositories_list(
                     next(iter(self.configs.values()))
                 )
             ]
         )
 
-        logs_panel = borgmatic.actions.browse.logs.Logs()
+        logs_panel = borgmatic_browse.logs.Logs()
         yield logs_panel
         yield textual.widgets.Footer()
 
-        borgmatic.actions.browse.logs.log_to_widget(logs_panel)
+        borgmatic_browse.logs.log_to_widget(logs_panel)
 
     def on_mount(self):
         '''

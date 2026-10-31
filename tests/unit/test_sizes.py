@@ -1,6 +1,6 @@
 import pytest
 
-from borgmatic.actions.browse import sizes as module
+from borgmatic_browse import sizes as module
 
 
 @pytest.mark.parametrize(

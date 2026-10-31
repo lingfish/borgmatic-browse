@@ -1,10 +1,9 @@
 import contextlib
 import logging
 
+import borgmatic.logger
 import textual._context
 import textual.widgets
-
-import borgmatic.logger
 
 
 class Rich_color_formatter(logging.Formatter):

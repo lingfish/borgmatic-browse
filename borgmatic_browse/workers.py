@@ -4,7 +4,7 @@ import os
 import textual
 import textual.signal
 
-import borgmatic.actions.browse.archive
+import borgmatic_browse.archive
 
 logger = logging.getLogger('__name__')
 
@@ -52,7 +52,7 @@ def add_repository_archives(browse_app, archive_loaded, config, repository):
     This function runs in a separate thread from the main UI. When loading is complete, publish a
     loading done signal.
     '''
-    archives_data = borgmatic.actions.browse.archive.get_repository_archives(config, repository)
+    archives_data = borgmatic_browse.archive.get_repository_archives(config, repository)
 
     # Reverse the archives, so the common case of accessing the latest archive is easy because it's
     # at the top.
@@ -94,7 +94,7 @@ def record_path(archive_path, hierarchy, path_components):
 
     leaf = path_components[-1]
 
-    if archive_path.path_type == borgmatic.actions.browse.archive.Path_type.DIRECTORY.value:
+    if archive_path.path_type == borgmatic_browse.archive.Path_type.DIRECTORY.value:
         directory.setdefault(leaf, Directory())
     else:
         directory[leaf] = archive_path
@@ -127,8 +127,8 @@ def get_paths(hierarchy, path_components, full_path_components=None):
         try:
             return (
                 archive_path
-                if isinstance(archive_path, borgmatic.actions.browse.archive.Archive_path)
-                else borgmatic.actions.browse.archive.Archive_path(
+                if isinstance(archive_path, borgmatic_browse.archive.Archive_path)
+                else borgmatic_browse.archive.Archive_path(
                     'd',
                     os.path.join(*full_path_components, component),
                     '',
@@ -218,7 +218,7 @@ def load_archive_paths(browse_app, path_loaded, config, repository, archive_name
     '''
     batch = []
 
-    for archive_path in borgmatic.actions.browse.archive.get_archive_paths(
+    for archive_path in borgmatic_browse.archive.get_archive_paths(
         config, repository, archive_name
     ):
         batch.append(archive_path)
@@ -261,7 +261,7 @@ def load_file_preview(
     This function runs in a separate thread from the main UI. When loading is complete, publish a
     loading done signal.
     '''
-    file_contents = borgmatic.actions.browse.archive.get_archive_file_content(
+    file_contents = borgmatic_browse.archive.get_archive_file_content(
         config, repository, archive_name, file_path
     )
 

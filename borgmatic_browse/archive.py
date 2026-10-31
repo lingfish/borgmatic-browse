@@ -5,7 +5,6 @@ import json
 import logging
 
 import binaryornot.helpers
-
 import borgmatic.borg.extract
 import borgmatic.borg.list
 import borgmatic.borg.repo_list

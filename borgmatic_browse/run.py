@@ -20,10 +20,10 @@ def run_browse(
         import textual  # noqa: F401, PLC0415
     except ImportError:  # pragma: no cover
         raise ValueError(
-            'Unable to import the Textual library for the browse action; try installing "borgmatic[browse]"'
+            'Unable to import the Textual library for the browse action; try reinstalling "borgmatic-browse"'
         )
 
-    import borgmatic.actions.browse.app  # noqa: PLC0415
+    import borgmatic_browse.app  # noqa: PLC0415
 
-    app = borgmatic.actions.browse.app.Browse_app(configs)
+    app = borgmatic_browse.app.Browse_app(configs)
     app.run()

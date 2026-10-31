@@ -1,8 +1,8 @@
 import textual.widgets
 
-import borgmatic.actions.browse.bindings
-import borgmatic.actions.browse.loading
-import borgmatic.actions.browse.workers
+import borgmatic_browse.bindings
+import borgmatic_browse.loading
+import borgmatic_browse.workers
 
 
 class Archives_list(textual.widgets.OptionList):
@@ -11,7 +11,7 @@ class Archives_list(textual.widgets.OptionList):
     selection event is handled in a Carousel instance, the parent widget of an Archives_list.
     '''
 
-    BINDINGS = borgmatic.actions.browse.bindings.OPTION_LIST_BINDINGS
+    BINDINGS = borgmatic_browse.bindings.OPTION_LIST_BINDINGS
 
     def __init__(self, config, repository):
         '''
@@ -25,11 +25,9 @@ class Archives_list(textual.widgets.OptionList):
         super().__init__(classes='panel')
         self.border_title = '📚 archives'
         self.highlighted_option_changed = False
-        self.archive_loaded = borgmatic.actions.browse.workers.Archive_loaded(
-            self, 'archive loaded'
-        )
+        self.archive_loaded = borgmatic_browse.workers.Archive_loaded(self, 'archive loaded')
 
-        self.loading_timer = borgmatic.actions.browse.loading.add_inline_loading_indicator(self)
+        self.loading_timer = borgmatic_browse.loading.add_inline_loading_indicator(self)
 
     def on_mount(self):
         '''
@@ -41,7 +39,7 @@ class Archives_list(textual.widgets.OptionList):
         '''
         self.archive_loaded.subscribe(self, self.on_archive_loaded)
 
-        borgmatic.actions.browse.workers.add_repository_archives(
+        borgmatic_browse.workers.add_repository_archives(
             self.app,
             archive_loaded=self.archive_loaded,
             config=self.config,
@@ -53,7 +51,7 @@ class Archives_list(textual.widgets.OptionList):
         When an archive loads, add it as an option to this archives list. But if we get a
         signal that all path loading is complete, stop and remove our loading indicator.
         '''
-        if archive_name is borgmatic.actions.browse.workers.LOADING_DONE:
+        if archive_name is borgmatic_browse.workers.LOADING_DONE:
             self.loading_timer.stop()
             self.remove_option('loading-indicator')
             return
@@ -86,7 +84,7 @@ class Archives_list(textual.widgets.OptionList):
     def on_option_list_option_highlighted(self, event):
         '''
         When the highlighted option changes, record that fact. This flag is consumed in
-        borgmatic.actions.browse.workers.add_repository_archives() in order to retain the
+        borgmatic_browse.workers.add_repository_archives() in order to retain the
         highlighted option even as other options load around it.
         '''
         if self.highlighted not in {None, 0}:

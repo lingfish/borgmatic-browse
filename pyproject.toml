@@ -1,0 +1,126 @@
+[project]
+name = "borgmatic-browse"
+version = "0.1.0.dev0"
+description = "Textual TUI for browsing Borg archives, derived from borgmatic's browse action"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Environment :: Console",
+    "Programming Language :: Python",
+    "Topic :: System :: Archiving :: Backup",
+]
+dependencies = [
+    # borgmatic's Python modules aren't a stable API, so only allow versions known to be compatible.
+    "borgmatic>=2.2.0,<2.3",
+    "binaryornot>=0.6.0",
+    "psutil",
+    "rich",
+    "textual>=2.0.3,<9",
+]
+
+[project.scripts]
+borgmatic-browse = "borgmatic_browse.cli:main"
+
+[dependency-groups]
+dev = [
+    "flexmock>=0.13.0",
+    "pytest>=9",
+    "pytest-asyncio>=1.4",
+    "pytest-cov>=7",
+    "pytest-timeout>=2.4",
+    "ruff",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["borgmatic_browse"]
+
+[tool.hatch.build.targets.sdist]
+include = ["borgmatic_browse", "tests", "LICENSE", "README.md", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = "tests"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "--cov-report term-missing:skip-covered --cov=borgmatic_browse --no-cov-on-fail --cov-fail-under=100 --timeout=120 --asyncio-mode=auto"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.format]
+quote-style = "preserve"
+
+[tool.ruff.lint]
+preview = false
+extend-select = [
+    "A",  # flake8-builtins: builtin shadowing
+    "B",  # flake8-bugbear: bugs and design problems
+    "BLE",  # flak8-blind-except: "except:" without exception type
+    "C4",  # flake8-comprehensions: generators and comprehensions
+    "COM",  # flake8-commas: trailing commas
+    "DTZ",  # flake8-datetimez: naive datetime
+    "E",  # pycodestyle: errors
+    "F",  # pyflakes: various linting
+    "ERA",  # eradicate: find commented out code
+    "FLY",  # flynt: f-string instead of string join
+    "FIX",  # flake8-fixme: leftover FIXMEs and TODOs
+    "I",  # isort: import ordering
+    "ISC",  # flake8-implicit-str-concat: implicit string concatenation
+    "LOG",  # flake8-logging: standard library logging
+    "N",  # pep8-naming: PEP-8 naming conventions
+    "PERF",  # perflint: performance linting
+    "PIE",  # flake8-pie: various linting
+    "PL",  # pylint: various linting
+    "Q",  # flake8-quotes: string quoting
+    "RET",  # flake-return: return statement
+    "RUF",  # Ruff-specific rules
+    "S",  # flake8-bandit: security testing
+    "SIM",  # flake-simplify: code simplifications
+    "T20",  # flake8-print: print statements
+    "TID",  # flake8-tidy-imports: absolute imports
+    "UP",  # pyupgrade: upgrade syntax for newer versions of Python
+    "W",  # pycodestyle: warnings
+    "YTT",  # flake8-202: sys.version misuse
+]
+ignore = [
+    "C408",  # unnecessary dict() call (conflicts with makeLogRecord())
+    "COM812",  # trailing comma missing (conflicts with formatter)
+    "B904",  # unchained exception raised within "except:" clause
+    "E501",  # line too long
+    "ISC001",  # implicit string concatenation on one line (conflicts with formatter)
+    "N801",  # class name not title case
+    "N818",  # exception class name doesn't end in "Error"
+    "PLR0913",  # too many positional arguments in function definition
+    "PLR0914",  # too many local variables
+    "PLR0917",  # too many positional arguments
+    "S105",  # hard-coded password
+    "S404",  # subprocess import
+    "SIM115",  # open() without context manager
+    "SIM905",  # split() on literal string
+    "TRY004", # type check and raise something other than TypeError
+]
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "single"
+inline-quotes = "single"
+multiline-quotes = "single"
+
+[tool.ruff.lint.isort]
+known-first-party = ["borgmatic_browse"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "C406",  # unnecessary list literal
+    "N802",  # uppercase in function name
+    "PLC1901",  # comparison to empty string
+    "PLR2004",  # magic value
+    "PLW1514",  # open() without encoding
+    "S101",  # asserts
+    "S106",  # hard-coded password
+    "S108",  # insecure usage of temporary file
+    "TID252",  # relative import from parent
+]

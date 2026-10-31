@@ -1,4 +1,4 @@
-from borgmatic.actions.browse import repositories_list as module
+from borgmatic_browse import repositories_list as module
 
 
 def test_repositories_list_populates_options():

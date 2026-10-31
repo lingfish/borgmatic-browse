@@ -1,6 +1,6 @@
 from flexmock import flexmock
 
-from borgmatic.actions.browse import archive as module
+from borgmatic_browse import archive as module
 
 
 def test_get_repository_archives_does_not_raise():

@@ -1,6 +1,6 @@
 import textual.widgets
 
-import borgmatic.actions.browse.bindings
+import borgmatic_browse.bindings
 
 
 class Repositories_list(textual.widgets.OptionList):
@@ -10,7 +10,7 @@ class Repositories_list(textual.widgets.OptionList):
     widget of a Repositories_list.
     '''
 
-    BINDINGS = borgmatic.actions.browse.bindings.OPTION_LIST_BINDINGS
+    BINDINGS = borgmatic_browse.bindings.OPTION_LIST_BINDINGS
 
     def __init__(self, config):
         '''

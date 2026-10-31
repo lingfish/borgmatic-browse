@@ -2,7 +2,7 @@ import os
 
 import textual.widgets
 
-import borgmatic.actions.browse.bindings
+import borgmatic_browse.bindings
 
 
 class Configuration_files_list(textual.widgets.OptionList):
@@ -12,7 +12,7 @@ class Configuration_files_list(textual.widgets.OptionList):
     Configuration_files_list.
     '''
 
-    BINDINGS = borgmatic.actions.browse.bindings.OPTION_LIST_BINDINGS
+    BINDINGS = borgmatic_browse.bindings.OPTION_LIST_BINDINGS
 
     def __init__(self, configs):
         '''

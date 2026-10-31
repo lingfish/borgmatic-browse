@@ -2,96 +2,92 @@ import pytest
 import textual.widgets.option_list
 from flexmock import flexmock
 
-import borgmatic.actions.browse.app
-import borgmatic.actions.browse.archive
-import borgmatic.actions.browse.carousel
-import borgmatic.actions.browse.loading
-import borgmatic.actions.browse.logs
-import borgmatic.actions.browse.workers
-from borgmatic.actions.browse import carousel as module
+import borgmatic_browse.app
+import borgmatic_browse.archive
+import borgmatic_browse.carousel
+import borgmatic_browse.loading
+import borgmatic_browse.logs
+import borgmatic_browse.workers
+from borgmatic_browse import carousel as module
 
 
 def test_make_next_panel_with_configuration_files_list_returns_repositories_list():
     configs = {'test.yaml': {'repositories': [{'path': 'test.borg'}]}}
 
     repositories_list = module.make_next_panel(
-        focused_panel=borgmatic.actions.browse.configuration_files_list.Configuration_files_list(
-            configs
-        ),
+        focused_panel=borgmatic_browse.configuration_files_list.Configuration_files_list(configs),
         option_id='test.yaml',
     )
 
-    assert isinstance(
-        repositories_list, borgmatic.actions.browse.repositories_list.Repositories_list
-    )
+    assert isinstance(repositories_list, borgmatic_browse.repositories_list.Repositories_list)
     assert repositories_list.config == configs['test.yaml']
 
 
 def test_make_next_panel_with_repositories_list_returns_archives_list():
     config = {'repositories': [{'path': 'test.borg'}]}
-    flexmock(borgmatic.actions.browse.loading).should_receive('add_inline_loading_indicator')
-    flexmock(borgmatic.actions.browse.workers).should_receive('add_repository_archives')
-    flexmock(borgmatic.actions.browse.archives_list.Archives_list).should_receive('app').and_return(
+    flexmock(borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    flexmock(borgmatic_browse.workers).should_receive('add_repository_archives')
+    flexmock(borgmatic_browse.archives_list.Archives_list).should_receive('app').and_return(
         flexmock()
     )
 
     archives_list = module.make_next_panel(
-        focused_panel=borgmatic.actions.browse.repositories_list.Repositories_list(config),
+        focused_panel=borgmatic_browse.repositories_list.Repositories_list(config),
         option_id=0,
     )
 
-    assert isinstance(archives_list, borgmatic.actions.browse.archives_list.Archives_list)
+    assert isinstance(archives_list, borgmatic_browse.archives_list.Archives_list)
     assert archives_list.config == config
     assert archives_list.repository == config['repositories'][0]
 
 
 def test_make_next_panel_with_archives_list_returns_directory_list():
     config = {'repositories': [{'path': 'test.borg'}]}
-    flexmock(borgmatic.actions.browse.loading).should_receive('add_inline_loading_indicator')
-    flexmock(borgmatic.actions.browse.workers).should_receive('add_repository_archives')
-    flexmock(borgmatic.actions.browse.workers).should_receive('load_archive_paths')
-    flexmock(borgmatic.actions.browse.archives_list.Archives_list).should_receive('app').and_return(
+    flexmock(borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    flexmock(borgmatic_browse.workers).should_receive('add_repository_archives')
+    flexmock(borgmatic_browse.workers).should_receive('load_archive_paths')
+    flexmock(borgmatic_browse.archives_list.Archives_list).should_receive('app').and_return(
         flexmock()
     )
-    flexmock(borgmatic.actions.browse.directory_list.Directory_list).should_receive(
-        'app'
-    ).and_return(flexmock())
+    flexmock(borgmatic_browse.directory_list.Directory_list).should_receive('app').and_return(
+        flexmock()
+    )
 
     directory_list = module.make_next_panel(
-        focused_panel=borgmatic.actions.browse.archives_list.Archives_list(
+        focused_panel=borgmatic_browse.archives_list.Archives_list(
             config, config['repositories'][0]
         ),
         option_id='archive',
     )
 
-    assert isinstance(directory_list, borgmatic.actions.browse.directory_list.Directory_list)
+    assert isinstance(directory_list, borgmatic_browse.directory_list.Directory_list)
     assert directory_list.config == config
     assert directory_list.repository == config['repositories'][0]
 
 
 def test_make_next_panel_with_root_directory_list_and_selected_directory_option_returns_new_directory_list():
     config = {'repositories': [{'path': 'test.borg'}]}
-    flexmock(borgmatic.actions.browse.loading).should_receive('add_inline_loading_indicator')
-    flexmock(borgmatic.actions.browse.workers).should_receive('load_archive_paths')
-    flexmock(borgmatic.actions.browse.workers).should_receive('Archive_path_loaded').replace_with(
+    flexmock(borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    flexmock(borgmatic_browse.workers).should_receive('load_archive_paths')
+    flexmock(borgmatic_browse.workers).should_receive('Archive_path_loaded').replace_with(
         flexmock(
             path_hierarchy={
-                'etc': borgmatic.actions.browse.workers.Directory(),
+                'etc': borgmatic_browse.workers.Directory(),
             },
             complete=False,
         ),
     )
-    flexmock(borgmatic.actions.browse.directory_list.Directory_list).should_receive(
-        'app'
-    ).and_return(flexmock())
-    focused_panel = borgmatic.actions.browse.directory_list.Directory_list(
+    flexmock(borgmatic_browse.directory_list.Directory_list).should_receive('app').and_return(
+        flexmock()
+    )
+    focused_panel = borgmatic_browse.directory_list.Directory_list(
         config, config['repositories'][0], 'archive'
     )
     flexmock(focused_panel).should_receive('get_option').and_return(flexmock(path_type='d'))
 
     directory_list = module.make_next_panel(focused_panel=focused_panel, option_id='etc')
 
-    assert isinstance(directory_list, borgmatic.actions.browse.directory_list.Directory_list)
+    assert isinstance(directory_list, borgmatic_browse.directory_list.Directory_list)
     assert directory_list.config == config
     assert directory_list.repository == config['repositories'][0]
     assert directory_list.archive_name == 'archive'
@@ -100,24 +96,24 @@ def test_make_next_panel_with_root_directory_list_and_selected_directory_option_
 
 def test_make_next_panel_with_non_root_directory_list_and_selected_directory_option_returns_new_directory_list():
     config = {'repositories': [{'path': 'test.borg'}]}
-    flexmock(borgmatic.actions.browse.loading).should_receive('add_inline_loading_indicator')
-    flexmock(borgmatic.actions.browse.workers).should_receive('load_archive_paths')
-    flexmock(borgmatic.actions.browse.workers).should_receive('Archive_path_loaded').replace_with(
+    flexmock(borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    flexmock(borgmatic_browse.workers).should_receive('load_archive_paths')
+    flexmock(borgmatic_browse.workers).should_receive('Archive_path_loaded').replace_with(
         flexmock(
             path_hierarchy={
-                'etc': borgmatic.actions.browse.workers.Directory(
+                'etc': borgmatic_browse.workers.Directory(
                     {
-                        'borgmatic': borgmatic.actions.browse.workers.Directory(),
+                        'borgmatic': borgmatic_browse.workers.Directory(),
                     },
                 ),
             },
             complete=False,
         ),
     )
-    flexmock(borgmatic.actions.browse.directory_list.Directory_list).should_receive(
-        'app'
-    ).and_return(flexmock())
-    focused_panel = borgmatic.actions.browse.directory_list.Directory_list(
+    flexmock(borgmatic_browse.directory_list.Directory_list).should_receive('app').and_return(
+        flexmock()
+    )
+    focused_panel = borgmatic_browse.directory_list.Directory_list(
         config,
         config['repositories'][0],
         'archive',
@@ -127,7 +123,7 @@ def test_make_next_panel_with_non_root_directory_list_and_selected_directory_opt
 
     directory_list = module.make_next_panel(focused_panel=focused_panel, option_id='borgmatic')
 
-    assert isinstance(directory_list, borgmatic.actions.browse.directory_list.Directory_list)
+    assert isinstance(directory_list, borgmatic_browse.directory_list.Directory_list)
     assert directory_list.config == config
     assert directory_list.repository == config['repositories'][0]
     assert directory_list.archive_name == 'archive'
@@ -136,23 +132,23 @@ def test_make_next_panel_with_non_root_directory_list_and_selected_directory_opt
 
 def test_make_next_panel_with_root_directory_list_and_selected_file_option_returns_new_file_preview():
     config = {'repositories': [{'path': 'test.borg'}]}
-    flexmock(borgmatic.actions.browse.loading).should_receive('add_inline_loading_indicator')
-    flexmock(borgmatic.actions.browse.workers).should_receive('load_archive_paths')
-    flexmock(borgmatic.actions.browse.workers).should_receive('load_file_preview')
-    flexmock(borgmatic.actions.browse.directory_list.Directory_list).should_receive(
-        'app'
-    ).and_return(flexmock())
-    flexmock(borgmatic.actions.browse.file_preview.File_preview).should_receive('app').and_return(
+    flexmock(borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    flexmock(borgmatic_browse.workers).should_receive('load_archive_paths')
+    flexmock(borgmatic_browse.workers).should_receive('load_file_preview')
+    flexmock(borgmatic_browse.directory_list.Directory_list).should_receive('app').and_return(
         flexmock()
     )
-    focused_panel = borgmatic.actions.browse.directory_list.Directory_list(
+    flexmock(borgmatic_browse.file_preview.File_preview).should_receive('app').and_return(
+        flexmock()
+    )
+    focused_panel = borgmatic_browse.directory_list.Directory_list(
         config, config['repositories'][0], 'archive'
     )
     flexmock(focused_panel).should_receive('get_option').and_return(flexmock(path_type='-'))
 
     directory_list = module.make_next_panel(focused_panel=focused_panel, option_id='config.yaml')
 
-    assert isinstance(directory_list, borgmatic.actions.browse.file_preview.File_preview)
+    assert isinstance(directory_list, borgmatic_browse.file_preview.File_preview)
     assert directory_list.config == config
     assert directory_list.repository == config['repositories'][0]
     assert directory_list.archive_name == 'archive'
@@ -161,17 +157,17 @@ def test_make_next_panel_with_root_directory_list_and_selected_file_option_retur
 
 def test_make_next_panel_with_non_root_directory_list_and_selected_file_option_returns_new_file_preview():
     config = {'repositories': [{'path': 'test.borg'}]}
-    flexmock(borgmatic.actions.browse.loading).should_receive('add_inline_loading_indicator')
-    flexmock(borgmatic.actions.browse.workers).should_receive('load_archive_paths')
-    flexmock(borgmatic.actions.browse.workers).should_receive('load_file_preview')
-    flexmock(borgmatic.actions.browse.workers).should_receive('Archive_path_loaded').replace_with(
+    flexmock(borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    flexmock(borgmatic_browse.workers).should_receive('load_archive_paths')
+    flexmock(borgmatic_browse.workers).should_receive('load_file_preview')
+    flexmock(borgmatic_browse.workers).should_receive('Archive_path_loaded').replace_with(
         flexmock(
             path_hierarchy={
-                'etc': borgmatic.actions.browse.workers.Directory(
+                'etc': borgmatic_browse.workers.Directory(
                     {
-                        'borgmatic': borgmatic.actions.browse.workers.Directory(
+                        'borgmatic': borgmatic_browse.workers.Directory(
                             {
-                                'config.yaml': borgmatic.actions.browse.archive.Archive_path(
+                                'config.yaml': borgmatic_browse.archive.Archive_path(
                                     '-', 'config.yaml', ''
                                 ),
                             },
@@ -182,13 +178,13 @@ def test_make_next_panel_with_non_root_directory_list_and_selected_file_option_r
             complete=False,
         ),
     )
-    flexmock(borgmatic.actions.browse.directory_list.Directory_list).should_receive(
-        'app'
-    ).and_return(flexmock())
-    flexmock(borgmatic.actions.browse.file_preview.File_preview).should_receive('app').and_return(
+    flexmock(borgmatic_browse.directory_list.Directory_list).should_receive('app').and_return(
         flexmock()
     )
-    focused_panel = borgmatic.actions.browse.directory_list.Directory_list(
+    flexmock(borgmatic_browse.file_preview.File_preview).should_receive('app').and_return(
+        flexmock()
+    )
+    focused_panel = borgmatic_browse.directory_list.Directory_list(
         config,
         config['repositories'][0],
         'archive',
@@ -198,7 +194,7 @@ def test_make_next_panel_with_non_root_directory_list_and_selected_file_option_r
 
     directory_list = module.make_next_panel(focused_panel=focused_panel, option_id='config.yaml')
 
-    assert isinstance(directory_list, borgmatic.actions.browse.file_preview.File_preview)
+    assert isinstance(directory_list, borgmatic_browse.file_preview.File_preview)
     assert directory_list.config == config
     assert directory_list.repository == config['repositories'][0]
     assert directory_list.archive_name == 'archive'
@@ -214,12 +210,12 @@ def test_make_next_panel_with_directory_list_and_unsupported_selected_option_ret
     path_type,
 ):
     config = {'repositories': [{'path': 'test.borg'}]}
-    flexmock(borgmatic.actions.browse.loading).should_receive('add_inline_loading_indicator')
-    flexmock(borgmatic.actions.browse.workers).should_receive('load_archive_paths')
-    flexmock(borgmatic.actions.browse.directory_list.Directory_list).should_receive(
-        'app'
-    ).and_return(flexmock())
-    focused_panel = borgmatic.actions.browse.directory_list.Directory_list(
+    flexmock(borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    flexmock(borgmatic_browse.workers).should_receive('load_archive_paths')
+    flexmock(borgmatic_browse.directory_list.Directory_list).should_receive('app').and_return(
+        flexmock()
+    )
+    focused_panel = borgmatic_browse.directory_list.Directory_list(
         config, config['repositories'][0], 'archive'
     )
     flexmock(focused_panel).should_receive('get_option').and_return(flexmock(path_type=path_type))
@@ -228,38 +224,38 @@ def test_make_next_panel_with_directory_list_and_unsupported_selected_option_ret
 
 
 async def test_carousel_previous_action_with_multiple_configs_does_not_raise():
-    app = borgmatic.actions.browse.app.Browse_app(
+    app = borgmatic_browse.app.Browse_app(
         configs={
             'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
             'test2.yaml': {'repositories': [{'path': 'test2.borg'}]},
         }
     )
-    flexmock(borgmatic.actions.browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
 
     async with app.run_test() as pilot:
         await pilot.press('left')
 
 
 async def test_carousel_previous_action_with_one_config_does_not_raise():
-    app = borgmatic.actions.browse.app.Browse_app(
+    app = borgmatic_browse.app.Browse_app(
         configs={
             'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
         }
     )
-    flexmock(borgmatic.actions.browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
 
     async with app.run_test() as pilot:
         await pilot.press('left')
 
 
 async def test_carousel_next_action_with_multiple_configs_advances_panel():
-    app = borgmatic.actions.browse.app.Browse_app(
+    app = borgmatic_browse.app.Browse_app(
         configs={
             'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
             'test2.yaml': {'repositories': [{'path': 'test2.borg'}]},
         }
     )
-    flexmock(borgmatic.actions.browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
 
     async with app.run_test() as pilot:
         await pilot.press('enter')
@@ -269,26 +265,24 @@ async def test_carousel_next_action_with_multiple_configs_advances_panel():
 
         assert isinstance(
             carousel.panels[0],
-            borgmatic.actions.browse.configuration_files_list.Configuration_files_list,
+            borgmatic_browse.configuration_files_list.Configuration_files_list,
         )
         assert carousel.panels[0].styles.display == 'none'
 
-        assert isinstance(
-            carousel.panels[1], borgmatic.actions.browse.repositories_list.Repositories_list
-        )
+        assert isinstance(carousel.panels[1], borgmatic_browse.repositories_list.Repositories_list)
         assert carousel.panels[1].styles.display == 'block'
         assert carousel.panels[1].highlighted == 0
         assert app.focused == carousel.panels[1]
 
 
 async def test_carousel_next_action_with_one_config_advances_panel():
-    app = borgmatic.actions.browse.app.Browse_app(
+    app = borgmatic_browse.app.Browse_app(
         configs={
             'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
         }
     )
-    flexmock(borgmatic.actions.browse.logs).should_receive('log_to_widget')
-    flexmock(borgmatic.actions.browse.workers).should_receive('add_repository_archives')
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.workers).should_receive('add_repository_archives')
 
     async with app.run_test() as pilot:
         await pilot.press('enter')
@@ -296,25 +290,23 @@ async def test_carousel_next_action_with_one_config_advances_panel():
         carousel = app.query_one(selector='Carousel')
         assert len(carousel.panels) == 2
 
-        assert isinstance(
-            carousel.panels[0], borgmatic.actions.browse.repositories_list.Repositories_list
-        )
+        assert isinstance(carousel.panels[0], borgmatic_browse.repositories_list.Repositories_list)
         assert carousel.panels[0].styles.display == 'none'
 
-        assert isinstance(carousel.panels[1], borgmatic.actions.browse.archives_list.Archives_list)
+        assert isinstance(carousel.panels[1], borgmatic_browse.archives_list.Archives_list)
         assert carousel.panels[1].styles.display == 'block'
         assert carousel.panels[1].highlighted == 0
         assert app.focused == carousel.panels[1]
 
 
 async def test_carousel_next_action_with_no_next_panel_does_not_advance():
-    app = borgmatic.actions.browse.app.Browse_app(
+    app = borgmatic_browse.app.Browse_app(
         configs={
             'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
         }
     )
-    flexmock(borgmatic.actions.browse.logs).should_receive('log_to_widget')
-    flexmock(borgmatic.actions.browse.workers).should_receive('add_repository_archives')
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.workers).should_receive('add_repository_archives')
     flexmock(module).should_receive('make_next_panel')
 
     async with app.run_test() as pilot:
@@ -323,21 +315,19 @@ async def test_carousel_next_action_with_no_next_panel_does_not_advance():
         carousel = app.query_one(selector='Carousel')
         assert len(carousel.panels) == 1
 
-        assert isinstance(
-            carousel.panels[0], borgmatic.actions.browse.repositories_list.Repositories_list
-        )
+        assert isinstance(carousel.panels[0], borgmatic_browse.repositories_list.Repositories_list)
         assert carousel.panels[0].styles.display == 'block'
         assert app.focused == carousel.panels[0]
 
 
 async def test_carousel_next_action_and_previous_action_returns_to_original_panel():
-    app = borgmatic.actions.browse.app.Browse_app(
+    app = borgmatic_browse.app.Browse_app(
         configs={
             'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
             'test2.yaml': {'repositories': [{'path': 'test2.borg'}]},
         }
     )
-    flexmock(borgmatic.actions.browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
 
     async with app.run_test() as pilot:
         await pilot.press('enter')
@@ -348,27 +338,25 @@ async def test_carousel_next_action_and_previous_action_returns_to_original_pane
 
         assert isinstance(
             carousel.panels[0],
-            borgmatic.actions.browse.configuration_files_list.Configuration_files_list,
+            borgmatic_browse.configuration_files_list.Configuration_files_list,
         )
         assert carousel.panels[0].styles.display == 'block'
         assert carousel.panels[0].highlighted == 0
 
-        assert isinstance(
-            carousel.panels[1], borgmatic.actions.browse.repositories_list.Repositories_list
-        )
+        assert isinstance(carousel.panels[1], borgmatic_browse.repositories_list.Repositories_list)
         assert carousel.panels[1].styles.display == 'none'
         assert app.focused == carousel.panels[0]
 
 
 async def test_carousel_next_action_and_previous_action_and_next_action_reuses_next_panel():
-    app = borgmatic.actions.browse.app.Browse_app(
+    app = borgmatic_browse.app.Browse_app(
         configs={
             'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
             'test2.yaml': {'repositories': [{'path': 'test2.borg'}]},
         }
     )
-    flexmock(borgmatic.actions.browse.logs).should_receive('log_to_widget')
-    flexmock(borgmatic.actions.browse.carousel).should_call('make_next_panel').once()
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.carousel).should_call('make_next_panel').once()
 
     async with app.run_test() as pilot:
         await pilot.press('enter')
@@ -380,26 +368,24 @@ async def test_carousel_next_action_and_previous_action_and_next_action_reuses_n
 
         assert isinstance(
             carousel.panels[0],
-            borgmatic.actions.browse.configuration_files_list.Configuration_files_list,
+            borgmatic_browse.configuration_files_list.Configuration_files_list,
         )
         assert carousel.panels[0].styles.display == 'none'
 
-        assert isinstance(
-            carousel.panels[1], borgmatic.actions.browse.repositories_list.Repositories_list
-        )
+        assert isinstance(carousel.panels[1], borgmatic_browse.repositories_list.Repositories_list)
         assert carousel.panels[1].styles.display == 'block'
         assert carousel.panels[1].highlighted == 0
         assert app.focused == carousel.panels[1]
 
 
 async def test_carousel_next_action_with_multiple_configs_and_no_next_panel_does_not_advance():
-    app = borgmatic.actions.browse.app.Browse_app(
+    app = borgmatic_browse.app.Browse_app(
         configs={
             'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
             'test2.yaml': {'repositories': [{'path': 'test2.borg'}]},
         }
     )
-    flexmock(borgmatic.actions.browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
     flexmock(module).should_receive('make_next_panel').and_return(None)
 
     async with app.run_test() as pilot:
@@ -410,7 +396,7 @@ async def test_carousel_next_action_with_multiple_configs_and_no_next_panel_does
 
         assert isinstance(
             carousel.panels[0],
-            borgmatic.actions.browse.configuration_files_list.Configuration_files_list,
+            borgmatic_browse.configuration_files_list.Configuration_files_list,
         )
         assert carousel.panels[0].styles.display == 'block'
         assert carousel.panels[0].highlighted == 0
@@ -418,13 +404,13 @@ async def test_carousel_next_action_with_multiple_configs_and_no_next_panel_does
 
 
 async def test_carousel_next_action_and_previous_action_and_down_truncates_next_panel():
-    app = borgmatic.actions.browse.app.Browse_app(
+    app = borgmatic_browse.app.Browse_app(
         configs={
             'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
             'test2.yaml': {'repositories': [{'path': 'test2.borg'}]},
         }
     )
-    flexmock(borgmatic.actions.browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
 
     async with app.run_test() as pilot:
         await pilot.press('enter')
@@ -436,7 +422,7 @@ async def test_carousel_next_action_and_previous_action_and_down_truncates_next_
 
         assert isinstance(
             carousel.panels[0],
-            borgmatic.actions.browse.configuration_files_list.Configuration_files_list,
+            borgmatic_browse.configuration_files_list.Configuration_files_list,
         )
         assert carousel.panels[0].styles.display == 'block'
         assert carousel.panels[0].highlighted == 1
@@ -444,13 +430,13 @@ async def test_carousel_next_action_and_previous_action_and_down_truncates_next_
 
 
 async def test_carousel_down_does_not_raise():
-    app = borgmatic.actions.browse.app.Browse_app(
+    app = borgmatic_browse.app.Browse_app(
         configs={
             'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
             'test2.yaml': {'repositories': [{'path': 'test2.borg'}]},
         }
     )
-    flexmock(borgmatic.actions.browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
 
     async with app.run_test() as pilot:
         await pilot.press('down')
@@ -460,7 +446,7 @@ async def test_carousel_down_does_not_raise():
 
         assert isinstance(
             carousel.panels[0],
-            borgmatic.actions.browse.configuration_files_list.Configuration_files_list,
+            borgmatic_browse.configuration_files_list.Configuration_files_list,
         )
         assert carousel.panels[0].styles.display == 'block'
         assert carousel.panels[0].highlighted == 1
@@ -468,13 +454,13 @@ async def test_carousel_down_does_not_raise():
 
 
 async def test_carousel_up_does_not_raise():
-    app = borgmatic.actions.browse.app.Browse_app(
+    app = borgmatic_browse.app.Browse_app(
         configs={
             'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
             'test2.yaml': {'repositories': [{'path': 'test2.borg'}]},
         }
     )
-    flexmock(borgmatic.actions.browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
 
     async with app.run_test() as pilot:
         await pilot.press('down')
@@ -484,7 +470,7 @@ async def test_carousel_up_does_not_raise():
 
         assert isinstance(
             carousel.panels[0],
-            borgmatic.actions.browse.configuration_files_list.Configuration_files_list,
+            borgmatic_browse.configuration_files_list.Configuration_files_list,
         )
         assert carousel.panels[0].styles.display == 'block'
         assert carousel.panels[0].highlighted == 1
@@ -492,13 +478,13 @@ async def test_carousel_up_does_not_raise():
 
 
 async def test_carousel_next_action_and_select_dot_dot_returns_to_original_panel():
-    app = borgmatic.actions.browse.app.Browse_app(
+    app = borgmatic_browse.app.Browse_app(
         configs={
             'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
             'test2.yaml': {'repositories': [{'path': 'test2.borg'}]},
         }
     )
-    flexmock(borgmatic.actions.browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
 
     async with app.run_test() as pilot:
         await pilot.press('enter')
@@ -512,13 +498,11 @@ async def test_carousel_next_action_and_select_dot_dot_returns_to_original_panel
 
         assert isinstance(
             carousel.panels[0],
-            borgmatic.actions.browse.configuration_files_list.Configuration_files_list,
+            borgmatic_browse.configuration_files_list.Configuration_files_list,
         )
         assert carousel.panels[0].styles.display == 'block'
         assert carousel.panels[0].highlighted == 0
 
-        assert isinstance(
-            carousel.panels[1], borgmatic.actions.browse.repositories_list.Repositories_list
-        )
+        assert isinstance(carousel.panels[1], borgmatic_browse.repositories_list.Repositories_list)
         assert carousel.panels[1].styles.display == 'none'
         assert app.focused == carousel.panels[0]

@@ -1,13 +1,13 @@
 import pytest
 from flexmock import flexmock
 
-from borgmatic.actions.browse import workers as module
+from borgmatic_browse import workers as module
 
 
 def test_add_repository_archives_publishes_for_each_archive():
-    flexmock(module.borgmatic.actions.browse.archive).should_receive(
-        'get_repository_archives'
-    ).and_return({'archives': [{'archive': 'foo'}, {'archive': 'bar'}]})
+    flexmock(module.borgmatic_browse.archive).should_receive('get_repository_archives').and_return(
+        {'archives': [{'archive': 'foo'}, {'archive': 'bar'}]}
+    )
     archive_loaded = flexmock()
     archive_loaded.should_receive('publish').with_args('bar').once()  # Reversed order.
     archive_loaded.should_receive('publish').with_args('foo').once()
@@ -80,7 +80,7 @@ def test_record_path_sets_directory_path_in_filesystem_hierarchy():
 
 
 def test_get_paths_lists_directory_contents():
-    baz_path = module.borgmatic.actions.browse.archive.Archive_path('-', 'foo/bar/baz.txt', '', 3)
+    baz_path = module.borgmatic_browse.archive.Archive_path('-', 'foo/bar/baz.txt', '', 3)
     hierarchy = {
         'foo': module.Directory(
             {'bar': module.Directory({'baz.txt': baz_path, 'other': module.Directory()})}
@@ -90,14 +90,12 @@ def test_get_paths_lists_directory_contents():
 
     assert tuple(module.get_paths(hierarchy, ('foo', 'bar'))) == (
         baz_path,
-        module.borgmatic.actions.browse.archive.Archive_path('d', 'foo/bar/other', '', 0),
+        module.borgmatic_browse.archive.Archive_path('d', 'foo/bar/other', '', 0),
     )
 
 
 def test_get_paths_with_full_path_components_lists_directory_contents():
-    baz_path = module.borgmatic.actions.browse.archive.Archive_path(
-        '-', 'etc/foo/bar/baz.txt', '', 3
-    )
+    baz_path = module.borgmatic_browse.archive.Archive_path('-', 'etc/foo/bar/baz.txt', '', 3)
     hierarchy = {
         'foo': module.Directory(
             {'bar': module.Directory({'baz.txt': baz_path, 'other': module.Directory()})}
@@ -107,14 +105,12 @@ def test_get_paths_with_full_path_components_lists_directory_contents():
 
     assert tuple(module.get_paths(hierarchy, ('foo', 'bar'), ('etc', 'foo', 'bar'))) == (
         baz_path,
-        module.borgmatic.actions.browse.archive.Archive_path('d', 'etc/foo/bar/other', '', 0),
+        module.borgmatic_browse.archive.Archive_path('d', 'etc/foo/bar/other', '', 0),
     )
 
 
 def test_get_paths_lists_empty_directory_contents():
-    baz_path = module.borgmatic.actions.browse.archive.Archive_path(
-        '-', 'etc/foo/bar/baz.txt', '', 3
-    )
+    baz_path = module.borgmatic_browse.archive.Archive_path('-', 'etc/foo/bar/baz.txt', '', 3)
     hierarchy = {
         'foo': module.Directory(
             {'bar': module.Directory({'baz.txt': baz_path, 'other': module.Directory()})}
@@ -148,7 +144,7 @@ def test_get_path_size_returns_cumulative_directory_size():
             {
                 'bar': module.Directory(
                     {
-                        'baz.txt': module.borgmatic.actions.browse.archive.Archive_path(
+                        'baz.txt': module.borgmatic_browse.archive.Archive_path(
                             '-', 'foo/bar/baz.txt', '', 3
                         )
                     },
@@ -164,7 +160,7 @@ def test_get_path_size_returns_cumulative_directory_size():
 
 
 def test_get_path_size_returns_file_size():
-    archive_path = module.borgmatic.actions.browse.archive.Archive_path('-', 'foo.txt', '', 7)
+    archive_path = module.borgmatic_browse.archive.Archive_path('-', 'foo.txt', '', 7)
     hierarchy = {'foo.txt': archive_path}
 
     assert module.get_path_size(hierarchy, ('foo.txt',)) == 7
@@ -172,7 +168,7 @@ def test_get_path_size_returns_file_size():
 
 def test_get_path_size_with_no_path_components_returns_whole_hierarchy_size():
     hierarchy = {
-        'foo.txt': module.borgmatic.actions.browse.archive.Archive_path('-', 'foo.txt', '', 7),
+        'foo.txt': module.borgmatic_browse.archive.Archive_path('-', 'foo.txt', '', 7),
         'etc': module.Directory(size=3),
     }
 
@@ -186,13 +182,13 @@ def test_get_path_size_with_unknown_path_returns_zero():
 
 
 def test_get_path_size_with_file_in_path_returns_zero():
-    archive_path = module.borgmatic.actions.browse.archive.Archive_path('-', 'foo.txt', '', 7)
+    archive_path = module.borgmatic_browse.archive.Archive_path('-', 'foo.txt', '', 7)
 
     assert module.get_path_size({'foo.txt': archive_path}, ('foo.txt', 'bar')) == 0
 
 
 def test_load_archive_paths_publishes_a_batch_of_archive_paths():
-    flexmock(module.borgmatic.actions.browse.archive).should_receive('get_archive_paths').and_yield(
+    flexmock(module.borgmatic_browse.archive).should_receive('get_archive_paths').and_yield(
         'foo.txt', 'bar.txt'
     )
     path_loaded = flexmock()
@@ -209,7 +205,7 @@ def test_load_archive_paths_publishes_a_batch_of_archive_paths():
 
 
 def test_load_archive_paths_publishes_full_batches():
-    flexmock(module.borgmatic.actions.browse.archive).should_receive('get_archive_paths').and_yield(
+    flexmock(module.borgmatic_browse.archive).should_receive('get_archive_paths').and_yield(
         *range(module.BATCH_SIZE + 1)
     )
     path_loaded = flexmock()
@@ -227,9 +223,9 @@ def test_load_archive_paths_publishes_full_batches():
 
 
 def test_load_file_preview_publishes_file_contents():
-    flexmock(module.borgmatic.actions.browse.archive).should_receive(
-        'get_archive_file_content'
-    ).and_return('hi')
+    flexmock(module.borgmatic_browse.archive).should_receive('get_archive_file_content').and_return(
+        'hi'
+    )
     file_preview_loaded = flexmock()
     file_preview_loaded.should_receive('publish').with_args('hi').once()
 

@@ -3,7 +3,7 @@ import textual.app
 import textual.widgets
 from flexmock import flexmock
 
-from borgmatic.actions.browse import loading as module
+from borgmatic_browse import loading as module
 
 
 def test_update_inline_loading_indicator_with_option_list_adds_a_dot():
