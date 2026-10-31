@@ -1,5 +1,6 @@
-import signal
+import contextlib
 
+import psutil
 import textual.app
 import textual.binding
 import textual.widgets
@@ -8,6 +9,20 @@ import borgmatic_browse.carousel
 import borgmatic_browse.configuration_files_list
 import borgmatic_browse.logs
 import borgmatic_browse.repositories_list
+
+
+def terminate_child_processes():
+    '''
+    Terminate every child process of this process, recursively, such as a Borg subprocess started
+    by a worker thread (and any SSH process that Borg itself started). Ignore any process that has
+    already exited.
+
+    Worker threads block while reading Borg's output, and Python waits for them at exit, so without
+    this a long-running Borg command would delay quitting until it finished.
+    '''
+    for child in psutil.Process().children(recursive=True):
+        with contextlib.suppress(psutil.NoSuchProcess):
+            child.terminate()
 
 
 class Browse_app(textual.app.App):
@@ -94,11 +109,15 @@ class Browse_app(textual.app.App):
         logs_panel = self.query_one('#logs')
         logs_panel.styles.display = 'none' if logs_panel.styles.display == 'block' else 'block'
 
-    def exit(self):  # pragma: no cover
+    def exit(self, *args, **kwargs):
         '''
-        Exit the application. But first raise a SIGTERM (handled in borgmatic/signals.py) to
-        encourage a fast exit by killing any ongoing Borg subprocesses.
-        '''
-        signal.raise_signal(signal.SIGTERM)
+        Exit the application. But first terminate any ongoing Borg subprocesses to encourage a fast
+        exit.
 
-        super().exit()
+        Terminate only this process's children rather than signalling the whole process group,
+        because a group-wide signal also hits whatever launched the app, and a wrapper like "uv run"
+        then forwards the signal back here.
+        '''
+        terminate_child_processes()
+
+        super().exit(*args, **kwargs)

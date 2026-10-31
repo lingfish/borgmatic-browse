@@ -50,6 +50,22 @@ async def test_browse_app_with_one_config_uses_repositories_list():
         app.query_one(selector='Footer')
 
 
+async def test_browse_app_quit_key_terminates_child_processes_and_exits():
+    app = borgmatic_browse.app.Browse_app(
+        configs={
+            'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
+        }
+    )
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.app).should_receive('terminate_child_processes').once()
+
+    async with app.run_test() as pilot:
+        await pilot.press('q')
+        await pilot.pause()
+
+    assert app.return_code == 0
+
+
 async def test_browse_app_key_toggles_logs_panel():
     app = borgmatic_browse.app.Browse_app(
         configs={
