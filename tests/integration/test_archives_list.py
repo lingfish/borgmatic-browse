@@ -40,7 +40,50 @@ def test_archives_list_on_archive_loaded_adds_archive_name():
     flexmock(archives_list).should_receive('remove_option').with_args('loading-indicator').once()
     flexmock(archives_list).should_receive('add_options').once()
 
-    archives_list.on_archive_loaded('archive')
+    archives_list.on_archive_loaded(
+        module.borgmatic_browse.archive.Archive('id', 'archive', '2026-10-31 17:40')
+    )
+
+
+async def test_archives_list_with_identically_named_archives_adds_an_option_for_each():
+    archives_list = module.Archives_list(config=flexmock(), repository=flexmock())
+    flexmock(module.borgmatic_browse.workers).should_receive('add_repository_archives')
+
+    class Test_app(textual.app.App):
+        def compose(self):
+            yield archives_list
+
+    async with Test_app().run_test():
+        for selector, time in (('id2', '2026-10-31 18:50'), ('id1', '2026-10-31 17:40')):
+            archives_list.on_archive_loaded(
+                module.borgmatic_browse.archive.Archive(selector, 'dup', time)
+            )
+
+        archives_list.on_archive_loaded(module.borgmatic_browse.workers.LOADING_DONE)
+
+        assert [option.id for option in archives_list.options] == ['id2', 'id1']
+        assert archives_list.archive_names == {'id2': 'dup', 'id1': 'dup'}
+        assert str(archives_list.options[0].prompt) == (
+            '[dim]2026-10-31 18:50[/dim]  dup [dim](latest)[/dim]'
+        )
+        assert str(archives_list.options[1].prompt) == '[dim]2026-10-31 17:40[/dim]  dup'
+
+
+def test_archives_list_on_archive_loaded_escapes_markup_in_archive_name():
+    flexmock(module.borgmatic_browse.loading).should_receive(
+        'add_inline_loading_indicator'
+    ).and_return(flexmock())
+    archives_list = module.Archives_list(config=flexmock(), repository=flexmock())
+    flexmock(archives_list).should_receive('get_option').and_return(flexmock())
+    flexmock(archives_list).should_receive('remove_option')
+    added = []
+    flexmock(archives_list).should_receive('add_options').replace_with(added.extend)
+
+    archives_list.on_archive_loaded(
+        module.borgmatic_browse.archive.Archive('id', 'bad[/name]', '2026-10-31 17:40')
+    )
+
+    assert 'bad\\[/name]' in str(added[0].prompt)
 
 
 def test_archives_list_on_option_list_option_highlighted_with_highlighted_none_marks_it_unchanged():

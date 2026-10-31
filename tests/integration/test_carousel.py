@@ -53,16 +53,16 @@ def test_make_next_panel_with_archives_list_returns_directory_list():
         flexmock()
     )
 
-    directory_list = module.make_next_panel(
-        focused_panel=borgmatic_browse.archives_list.Archives_list(
-            config, config['repositories'][0]
-        ),
-        option_id='archive',
-    )
+    archives_list = borgmatic_browse.archives_list.Archives_list(config, config['repositories'][0])
+    archives_list.archive_names['abc123'] = 'archive'
+
+    directory_list = module.make_next_panel(focused_panel=archives_list, option_id='abc123')
 
     assert isinstance(directory_list, borgmatic_browse.directory_list.Directory_list)
     assert directory_list.config == config
     assert directory_list.repository == config['repositories'][0]
+    assert directory_list.archive_name == 'abc123'
+    assert directory_list.archive_label == 'archive'
 
 
 def test_make_next_panel_with_root_directory_list_and_selected_directory_option_returns_new_directory_list():

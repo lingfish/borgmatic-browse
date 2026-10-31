@@ -34,7 +34,10 @@ def make_next_panel(focused_panel, option_id):
 
     if isinstance(focused_panel, borgmatic_browse.archives_list.Archives_list):
         return borgmatic_browse.directory_list.Directory_list(
-            config=focused_panel.config, repository=focused_panel.repository, archive_name=option_id
+            config=focused_panel.config,
+            repository=focused_panel.repository,
+            archive_name=option_id,
+            archive_label=focused_panel.archive_names[option_id],
         )
 
     if isinstance(focused_panel, borgmatic_browse.directory_list.Directory_list):

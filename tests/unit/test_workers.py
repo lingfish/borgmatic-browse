@@ -8,12 +8,14 @@ from borgmatic_browse import workers as module
 
 
 def test_add_repository_archives_publishes_for_each_archive():
+    foo = module.borgmatic_browse.archive.Archive('1', 'foo', '2026-10-31 17:40')
+    bar = module.borgmatic_browse.archive.Archive('2', 'bar', '2026-10-31 18:50')
     flexmock(module.borgmatic_browse.archive).should_receive('get_repository_archives').and_return(
-        {'archives': [{'archive': 'foo'}, {'archive': 'bar'}]}
+        (foo, bar)
     )
     archive_loaded = flexmock()
-    archive_loaded.should_receive('publish').with_args('bar').once()  # Reversed order.
-    archive_loaded.should_receive('publish').with_args('foo').once()
+    archive_loaded.should_receive('publish').with_args(bar).once()  # Reversed order.
+    archive_loaded.should_receive('publish').with_args(foo).once()
     archive_loaded.should_receive('publish').with_args(module.LOADING_DONE).once()
 
     module.add_repository_archives.__wrapped__(

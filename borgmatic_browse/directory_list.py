@@ -202,17 +202,27 @@ class Directory_list(textual.widgets.OptionList):
 
     BINDINGS = borgmatic_browse.bindings.OPTION_LIST_BINDINGS
 
-    def __init__(self, config, repository, archive_name, path_loaded=None, path_components=None):
+    def __init__(
+        self,
+        config,
+        repository,
+        archive_name,
+        path_loaded=None,
+        path_components=None,
+        archive_label=None,
+    ):
         '''
-        Given a configuration dict, a repository dict, an archive name, an optional
-        Archive_path_loaded instance for signalling new paths as they load, and an optional tuple of
-        path components indicating this directory's position in the backed up filesystem, prepare to
-        load paths from the archive for eventual display in this widget. Actual loading kicks off in
-        on_mount() below.
+        Given a configuration dict, a repository dict, an archive name or ID to give Borg, an
+        optional Archive_path_loaded instance for signalling new paths as they load, an optional
+        tuple of path components indicating this directory's position in the backed up filesystem,
+        and an optional archive name to display (if the archive is otherwise selected by ID),
+        prepare to load paths from the archive for eventual display in this widget. Actual loading
+        kicks off in on_mount() below.
         '''
         self.config = config
         self.repository = repository
         self.archive_name = archive_name
+        self.archive_label = archive_label or archive_name
         self.path_components = path_components or ()
         self.highlighted_option_changed = False
 
@@ -283,7 +293,7 @@ class Directory_list(textual.widgets.OptionList):
                 '📁',
                 os.path.sep.join(self.path_components)
                 if self.path_components
-                else f'{self.archive_name}',
+                else f'{self.archive_label}',
                 f'({borgmatic_browse.sizes.format_size(size)})',
             )
         )

@@ -69,8 +69,6 @@ Press `v` in the UI to see the logs panel and `q` to quit.
 
 * Only archives matching `{hostname}-*` are listed by default, because that's borgmatic's default
   archive name format. Set `match_archives` or `archive_name_format` to change this.
-* Archive names are used as option IDs, which breaks on Borg 2, where they aren't unique
-  ([borgmatic issue 1377](https://projects.torsion.org/borgmatic-collective/borgmatic/issues/1377)).
 * If a repository needs a passphrase that isn't configured, Borg prompts for it on the terminal
   underneath the UI, and the app appears to hang on the loading indicator.
 * If the app is killed from outside, such as with a SIGTERM, it doesn't restore the terminal or

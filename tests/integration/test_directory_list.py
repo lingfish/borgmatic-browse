@@ -492,3 +492,15 @@ def test_directory_list_update_border_title_reflects_newly_loaded_archive_size()
     directory_list.update_border_title()
 
     assert directory_list.border_title == '📁 archive (1.02 kB)'
+
+
+def test_directory_list_border_title_shows_archive_label_instead_of_archive_id():
+    flexmock(module.borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+
+    directory_list = module.Directory_list(
+        config=flexmock(), repository=flexmock(), archive_name='abc123', archive_label='archive'
+    )
+
+    assert directory_list.archive_name == 'abc123'
+    assert 'archive' in directory_list.border_title
+    assert 'abc123' not in directory_list.border_title

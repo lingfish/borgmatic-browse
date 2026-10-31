@@ -60,7 +60,7 @@ class Archive_loaded(textual.signal.Signal):
     consumption in widgets that display archives as they are loaded. This signal also publishes
     when loading is complete.
 
-    Each subscribed callback call includes the archive as an archive name string. Given the lack of
+    Each subscribed callback call includes the archive as an Archive instance. Given the lack of
     other identifying information (configuration file, repository), there should be a separate
     Archive_loaded instance per repository.
     '''
@@ -77,7 +77,7 @@ def add_repository_archives(browse_app, archive_loaded, config, repository):
     loading done signal.
     '''
     try:
-        archives_data = borgmatic_browse.archive.get_repository_archives(config, repository)
+        archives = borgmatic_browse.archive.get_repository_archives(config, repository)
     except LOADING_ERRORS as error:
         report_loading_error(browse_app, 'Error listing repository', error)
         archive_loaded.publish(LOADING_DONE)
@@ -85,8 +85,8 @@ def add_repository_archives(browse_app, archive_loaded, config, repository):
 
     # Reverse the archives, so the common case of accessing the latest archive is easy because it's
     # at the top.
-    for archive in reversed(archives_data['archives']):
-        archive_loaded.publish(archive['archive'])
+    for archive in reversed(archives):
+        archive_loaded.publish(archive)
 
     archive_loaded.publish(LOADING_DONE)
 

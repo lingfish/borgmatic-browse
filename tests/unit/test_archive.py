@@ -1,15 +1,54 @@
+import pytest
 from flexmock import flexmock
 
 from borgmatic_browse import archive as module
 
+REPO_LIST_JSON = '''
+    {"archives": [
+        {"archive": "dup", "name": "dup", "id": "abc123", "time": "2026-10-31T17:40:59.123456"},
+        {"archive": "dup", "name": "dup", "id": "def456", "time": "2026-10-31T18:50:00.000000"}
+    ]}
+'''
 
-def test_get_repository_archives_does_not_raise():
+
+@pytest.mark.parametrize(
+    'borg_version,expected_selectors',
+    (
+        ('1.4.5', ('dup', 'dup')),
+        # Names only form series of identically named archives starting from this version.
+        ('2.0.0b10', ('dup', 'dup')),
+        ('2.0.0b11', ('abc123', 'def456')),
+    ),
+)
+def test_get_repository_archives_selects_by_id_only_if_names_might_not_be_unique(
+    borg_version, expected_selectors
+):
+    config = {'repositories': [{'path': 'test.borg'}]}
+    flexmock(module.borgmatic.logger).should_receive('Log_prefix').and_return(flexmock())
+    flexmock(module.borgmatic.borg.version).should_receive('local_borg_version').and_return(
+        borg_version
+    )
+    flexmock(module.borgmatic.borg.repo_list).should_receive('list_repository').and_return(
+        REPO_LIST_JSON
+    )
+
+    archives = module.get_repository_archives(config, config['repositories'][0])
+
+    assert tuple(archive.selector for archive in archives) == expected_selectors
+
+
+def test_get_repository_archives_returns_archive_names_and_formatted_times():
     config = {'repositories': [{'path': 'test.borg'}]}
     flexmock(module.borgmatic.logger).should_receive('Log_prefix').and_return(flexmock())
     flexmock(module.borgmatic.borg.version).should_receive('local_borg_version').and_return('3.0')
-    flexmock(module.borgmatic.borg.repo_list).should_receive('list_repository').and_return('{}')
+    flexmock(module.borgmatic.borg.repo_list).should_receive('list_repository').and_return(
+        REPO_LIST_JSON
+    )
 
-    assert module.get_repository_archives(config, config['repositories'][0]) == {}
+    assert module.get_repository_archives(config, config['repositories'][0]) == (
+        module.Archive('abc123', 'dup', '2026-10-31 17:40'),
+        module.Archive('def456', 'dup', '2026-10-31 18:50'),
+    )
 
 
 def test_get_archive_paths_returns_each_as_archive_path_with_metadata():

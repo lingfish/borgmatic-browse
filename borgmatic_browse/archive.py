@@ -6,10 +6,13 @@ import logging
 
 import binaryornot.helpers
 import borgmatic.borg.extract
+import borgmatic.borg.feature
 import borgmatic.borg.list
 import borgmatic.borg.repo_list
 import borgmatic.borg.version
 import borgmatic.execute
+
+import borgmatic_browse.times
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +24,10 @@ class Path_type(enum.Enum):
     FILE = '-'
 
 
+# A data structure capturing an archive in a repository. The selector is what to give Borg to select
+# this archive, the name is what to show the user, and the time is already formatted for display.
+Archive = collections.namedtuple('Archive', ('selector', 'name', 'time'))
+
 # A data structure capturing a path stored in a Borg archive.
 Archive_path = collections.namedtuple(
     'Archive_path',
@@ -31,8 +38,14 @@ Archive_path = collections.namedtuple(
 
 def get_repository_archives(config, repository):
     '''
-    Given a configuration dict and a repository dict, return a list of the repository's archives,
-    one dict per archive.
+    Given a configuration dict and a repository dict, return a tuple of the repository's archives,
+    oldest first, each as an Archive instance.
+
+    Select archives by ID with Borg versions in which identically named archives form a series,
+    since a name doesn't identify a single archive there. borgmatic recognizes the ID when it's
+    later given as an archive. Select by name with other versions, which can't select by ID.
+
+    Raise ValueError if an archive's time can't be parsed.
     '''
     with borgmatic.logger.Log_prefix(repository.get('label', repository['path'])):
         logger.info('Listing repository')
@@ -52,7 +65,7 @@ def get_repository_archives(config, repository):
         remote_path = config.get('remote_path')
         local_borg_version = borgmatic.borg.version.local_borg_version(config, local_path)
 
-        return json.loads(
+        repository_data = json.loads(
             borgmatic.borg.repo_list.list_repository(
                 repository['path'],
                 config,
@@ -62,6 +75,18 @@ def get_repository_archives(config, repository):
                 local_path,
                 remote_path,
             )
+        )
+        select_by_id = borgmatic.borg.feature.available(
+            borgmatic.borg.feature.Feature.ARCHIVE_SERIES, local_borg_version
+        )
+
+        return tuple(
+            Archive(
+                archive['id'] if select_by_id else archive['archive'],
+                archive['archive'],
+                borgmatic_browse.times.format_time(archive['time']),
+            )
+            for archive in repository_data['archives']
         )
 
 

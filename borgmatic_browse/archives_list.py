@@ -1,3 +1,4 @@
+import rich.markup
 import textual.widgets
 
 import borgmatic_browse.bindings
@@ -25,6 +26,7 @@ class Archives_list(textual.widgets.OptionList):
         super().__init__(classes='panel')
         self.border_title = '📚 archives'
         self.highlighted_option_changed = False
+        self.archive_names = {}
         self.archive_loaded = borgmatic_browse.workers.Archive_loaded(self, 'archive loaded')
 
         self.loading_timer = borgmatic_browse.loading.add_inline_loading_indicator(self)
@@ -46,19 +48,20 @@ class Archives_list(textual.widgets.OptionList):
             repository=self.repository,
         )
 
-    def on_archive_loaded(self, archive_name):
+    def on_archive_loaded(self, archive):
         '''
-        When an archive loads, add it as an option to this archives list. But if we get a
-        signal that all path loading is complete, stop and remove our loading indicator.
+        When an archive loads, add it as an option to this archives list, showing its time beside
+        its name. Escape the name because it might look like markup. But if we get a signal that all
+        path loading is complete, stop and remove our loading indicator.
         '''
-        if archive_name is borgmatic_browse.workers.LOADING_DONE:
+        if archive is borgmatic_browse.workers.LOADING_DONE:
             self.loading_timer.stop()
             self.remove_option('loading-indicator')
             return
 
-        label_pieces = (
-            (archive_name, '[dim](latest)[/dim]') if len(self.options) == 1 else (archive_name,)
-        )
+        name = rich.markup.escape(archive.name)
+        label_pieces = (name, '[dim](latest)[/dim]') if len(self.options) == 1 else (name,)
+        self.archive_names[archive.selector] = archive.name
 
         # Textual 6.0.0+ has self.highlighted_option, but we want to support older versions.
         highlighted_option = (
@@ -69,7 +72,9 @@ class Archives_list(textual.widgets.OptionList):
         self.remove_option('loading-indicator')
         self.add_options(
             (
-                textual.widgets.option_list.Option(' '.join(label_pieces), id=archive_name),
+                textual.widgets.option_list.Option(
+                    f'[dim]{archive.time}[/dim]  {" ".join(label_pieces)}', id=archive.selector
+                ),
                 loading_indicator,
             ),
         )
