@@ -1,5 +1,8 @@
 # borgmatic-browse
 
+[![test](https://github.com/lingfish/borgmatic-browse/actions/workflows/test.yaml/badge.svg)](https://github.com/lingfish/borgmatic-browse/actions/workflows/test.yaml)
+[![PyPI](https://img.shields.io/pypi/v/borgmatic-browse)](https://pypi.org/project/borgmatic-browse/)
+
 A [Textual](https://textual.textualize.io/) terminal UI for browsing the Borg archives of the
 repositories in your [borgmatic](https://torsion.org/borgmatic/) configuration: drill down from
 configuration file to repository, archive, directory, and file preview.
@@ -7,7 +10,10 @@ configuration file to repository, archive, directory, and file preview.
 ## Not an official project
 
 borgmatic-browse is **derived from borgmatic, but it is not part of borgmatic, and it is not an
-official or endorsed project**. Please don't report problems with it to the borgmatic project.
+official or endorsed project**. Please report problems with borgmatic-browse in [this project's
+issue tracker](https://github.com/lingfish/borgmatic-browse/issues), not to the borgmatic project.
+Conversely, problems with borgmatic itself belong in [borgmatic's issue
+tracker](https://projects.torsion.org/borgmatic-collective/borgmatic/issues).
 
 Unlike borgmatic, which doesn't accept AI-written code, this project's code may be written by AI.
 For that reason, **nothing from this project should be submitted upstream to borgmatic**.
@@ -34,10 +40,10 @@ with its authors.
 Install with [pipx](https://pipx.pypa.io/) so that the app gets its own isolated environment:
 
 ```bash
-pipx install /path/to/borgmatic-browse
+pipx install borgmatic-browse
 ```
 
-`uv tool install /path/to/borgmatic-browse` works too.
+`uv tool install borgmatic-browse` works too.
 
 Either way, this installs a compatible version of the borgmatic Python package as a dependency,
 rather than using any borgmatic you already have installed. The compatible range is deliberately
@@ -86,3 +92,18 @@ To try the app from the source tree:
 ```bash
 uv run borgmatic-browse -c /path/to/config.yaml -v 1
 ```
+
+### Releasing
+
+The package version comes from git tags, via hatch-vcs. To release, tag a commit on `main` and
+push the tag:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The release workflow in GitHub Actions then builds the sdist and wheel and publishes them to PyPI
+using trusted publishing, so no API tokens are involved. Running the same workflow by hand from
+the Actions tab publishes a development version to TestPyPI instead, which is a way to exercise
+the pipeline without releasing.

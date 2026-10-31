@@ -1,6 +1,6 @@
 [project]
 name = "borgmatic-browse"
-version = "0.1.0.dev0"
+dynamic = ["version"]
 description = "Textual TUI for browsing Borg archives, derived from borgmatic's browse action"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
@@ -20,6 +20,11 @@ dependencies = [
     "textual>=2.0.3,<9",
 ]
 
+[project.urls]
+Homepage = "https://github.com/lingfish/borgmatic-browse"
+Source = "https://github.com/lingfish/borgmatic-browse"
+Issues = "https://github.com/lingfish/borgmatic-browse/issues"
+
 [project.scripts]
 borgmatic-browse = "borgmatic_browse.cli:main"
 
@@ -34,8 +39,17 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling>=1.27"]
+requires = ["hatchling>=1.27", "hatch-vcs>=0.5"]
 build-backend = "hatchling.build"
+
+# The version comes from git tags: a "v0.1.0" tag builds version 0.1.0, and any later untagged
+# commit builds a 0.1.1.devN pre-release. Drop the "+g<hash>" local version suffix, which PyPI and
+# TestPyPI reject.
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+local_scheme = "no-local-version"
 
 [tool.hatch.build.targets.wheel]
 packages = ["borgmatic_browse"]
