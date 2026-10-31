@@ -1,4 +1,5 @@
 import pytest
+import textual.widgets._header
 import textual.widgets.option_list
 from flexmock import flexmock
 
@@ -9,6 +10,10 @@ import borgmatic_browse.loading
 import borgmatic_browse.logs
 import borgmatic_browse.workers
 from borgmatic_browse import carousel as module
+
+# The separator between the parts of a location, written as an escape to keep ruff's ambiguous
+# character check quiet.
+SEP = ' \u203a '
 
 
 def test_make_next_panel_with_configuration_files_list_returns_repositories_list():
@@ -506,3 +511,225 @@ async def test_carousel_next_action_and_select_dot_dot_returns_to_original_panel
         assert isinstance(carousel.panels[1], borgmatic_browse.repositories_list.Repositories_list)
         assert carousel.panels[1].styles.display == 'none'
         assert app.focused == carousel.panels[0]
+
+
+def make_directory_list(path_components=None):
+    flexmock(borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+
+    return borgmatic_browse.directory_list.Directory_list(
+        {'repositories': [{'path': 'test.borg', 'label': 'mine'}]},
+        {'path': 'test.borg', 'label': 'mine'},
+        'abc123',
+        path_components=path_components,
+        archive_label='nightly',
+    )
+
+
+@pytest.mark.parametrize(
+    'panel_class,argument',
+    (
+        (
+            borgmatic_browse.configuration_files_list.Configuration_files_list,
+            {'test.yaml': {'repositories': [{'path': 'test.borg'}]}},
+        ),
+        (
+            borgmatic_browse.repositories_list.Repositories_list,
+            {'repositories': [{'path': 'test.borg'}]},
+        ),
+    ),
+)
+def test_get_panel_location_with_configuration_files_or_repositories_list_returns_empty(
+    panel_class, argument
+):
+    assert module.get_panel_location(panel_class(argument)) == ''
+
+
+@pytest.mark.parametrize(
+    'repository,expected_location',
+    (
+        ({'path': 'test.borg', 'label': 'mine'}, 'mine'),
+        ({'path': 'test.borg'}, 'test.borg'),
+    ),
+)
+def test_get_panel_location_with_archives_list_returns_repository_label_or_path(
+    repository, expected_location
+):
+    flexmock(borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    archives_list = borgmatic_browse.archives_list.Archives_list(
+        {'repositories': [repository]}, repository
+    )
+
+    assert module.get_panel_location(archives_list) == expected_location
+
+
+def test_get_panel_location_with_root_directory_list_returns_repository_and_archive_label():
+    assert module.get_panel_location(make_directory_list()) == SEP.join(('mine', 'nightly'))
+
+
+def test_get_panel_location_with_non_root_directory_list_returns_repository_archive_and_path():
+    directory_list = make_directory_list(path_components=('foo', 'bar'))
+
+    assert module.get_panel_location(directory_list) == SEP.join(('mine', 'nightly', 'foo/bar'))
+
+
+def test_get_panel_location_with_file_preview_returns_repository_archive_and_file_path():
+    flexmock(borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    file_preview = borgmatic_browse.file_preview.File_preview(
+        {'repositories': [{'path': 'test.borg', 'label': 'mine'}]},
+        {'path': 'test.borg', 'label': 'mine'},
+        'abc123',
+        file_path='foo/bar.txt',
+        archive_label='nightly',
+    )
+
+    assert module.get_panel_location(file_preview) == SEP.join(('mine', 'nightly', 'foo/bar.txt'))
+
+
+def test_get_panel_location_with_file_preview_without_archive_label_uses_archive_name():
+    flexmock(borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    file_preview = borgmatic_browse.file_preview.File_preview(
+        {'repositories': [{'path': 'test.borg'}]},
+        {'path': 'test.borg'},
+        'archive',
+        file_path='foo.txt',
+    )
+
+    assert file_preview.archive_label == 'archive'
+    assert module.get_panel_location(file_preview) == SEP.join(('test.borg', 'archive', 'foo.txt'))
+
+
+def test_make_next_panel_with_directory_list_carries_archive_label_to_new_directory_list():
+    config = {'repositories': [{'path': 'test.borg'}]}
+    flexmock(borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    flexmock(borgmatic_browse.workers).should_receive('load_archive_paths')
+    flexmock(borgmatic_browse.directory_list.Directory_list).should_receive('app').and_return(
+        flexmock()
+    )
+    focused_panel = borgmatic_browse.directory_list.Directory_list(
+        config, config['repositories'][0], 'abc123', archive_label='nightly'
+    )
+    flexmock(focused_panel).should_receive('get_option').and_return(flexmock(path_type='d'))
+
+    directory_list = module.make_next_panel(focused_panel=focused_panel, option_id='etc')
+
+    assert directory_list.archive_name == 'abc123'
+    assert directory_list.archive_label == 'nightly'
+
+
+def test_make_next_panel_with_directory_list_carries_archive_label_to_new_file_preview():
+    config = {'repositories': [{'path': 'test.borg'}]}
+    flexmock(borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    flexmock(borgmatic_browse.workers).should_receive('load_archive_paths')
+    flexmock(borgmatic_browse.workers).should_receive('load_file_preview')
+    flexmock(borgmatic_browse.directory_list.Directory_list).should_receive('app').and_return(
+        flexmock()
+    )
+    flexmock(borgmatic_browse.file_preview.File_preview).should_receive('app').and_return(
+        flexmock()
+    )
+    focused_panel = borgmatic_browse.directory_list.Directory_list(
+        config, config['repositories'][0], 'abc123', archive_label='nightly'
+    )
+    flexmock(focused_panel).should_receive('get_option').and_return(flexmock(path_type='-'))
+
+    file_preview = module.make_next_panel(focused_panel=focused_panel, option_id='config.yaml')
+
+    assert file_preview.archive_name == 'abc123'
+    assert file_preview.archive_label == 'nightly'
+
+
+async def test_carousel_sub_title_starts_empty():
+    app = borgmatic_browse.app.Browse_app(
+        configs={'test1.yaml': {'repositories': [{'path': 'test1.borg', 'label': 'mine'}]}}
+    )
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
+
+    async with app.run_test():
+        assert app.sub_title == ''
+
+
+async def test_carousel_next_action_sets_sub_title_to_new_panel_location():
+    app = borgmatic_browse.app.Browse_app(
+        configs={'test1.yaml': {'repositories': [{'path': 'test1.borg', 'label': 'mine'}]}}
+    )
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.workers).should_receive('add_repository_archives')
+
+    async with app.run_test() as pilot:
+        await pilot.press('enter')
+
+        assert app.sub_title == 'mine'
+
+
+async def test_carousel_previous_action_sets_sub_title_to_previous_panel_location():
+    app = borgmatic_browse.app.Browse_app(
+        configs={'test1.yaml': {'repositories': [{'path': 'test1.borg', 'label': 'mine'}]}}
+    )
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.workers).should_receive('add_repository_archives')
+
+    async with app.run_test() as pilot:
+        await pilot.press('enter')
+        assert app.sub_title == 'mine'
+
+        await pilot.press('left')
+
+        assert app.sub_title == ''
+
+
+async def test_carousel_previous_action_at_first_panel_leaves_sub_title_unchanged():
+    app = borgmatic_browse.app.Browse_app(
+        configs={'test1.yaml': {'repositories': [{'path': 'test1.borg', 'label': 'mine'}]}}
+    )
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
+
+    async with app.run_test() as pilot:
+        app.sub_title = 'sentinel'
+        await pilot.press('left')
+
+        assert app.sub_title == 'sentinel'
+
+
+async def test_carousel_next_action_with_no_next_panel_leaves_sub_title_unchanged():
+    app = borgmatic_browse.app.Browse_app(
+        configs={'test1.yaml': {'repositories': [{'path': 'test1.borg', 'label': 'mine'}]}}
+    )
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
+    flexmock(module).should_receive('make_next_panel').and_return(None)
+
+    async with app.run_test() as pilot:
+        app.sub_title = 'sentinel'
+        await pilot.press('enter')
+
+        assert app.sub_title == 'sentinel'
+
+
+async def test_carousel_next_action_reusing_existing_panel_sets_sub_title():
+    app = borgmatic_browse.app.Browse_app(
+        configs={'test1.yaml': {'repositories': [{'path': 'test1.borg', 'label': 'mine'}]}}
+    )
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.workers).should_receive('add_repository_archives')
+
+    async with app.run_test() as pilot:
+        await pilot.press('enter')
+        await pilot.press('left')
+        await pilot.press('enter')
+
+        assert app.sub_title == 'mine'
+
+
+async def test_header_with_markup_like_archive_name_in_sub_title_shows_it_literally():
+    app = borgmatic_browse.app.Browse_app(
+        configs={'test1.yaml': {'repositories': [{'path': 'test1.borg', 'label': 'mine'}]}}
+    )
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
+
+    async with app.run_test() as pilot:
+        app.sub_title = SEP.join(('mine', 'bad[/name]', 'foo'))
+        await pilot.pause()
+
+        header_title = app.query_one(textual.widgets._header.HeaderTitle)
+
+        assert app._exception is None
+        assert SEP.join(('mine', 'bad[/name]', 'foo')) in str(header_title.visual)

@@ -31,15 +31,17 @@ class File_preview(textual.widgets.RichLog):
         ),
     )
 
-    def __init__(self, config, repository, archive_name, file_path):
+    def __init__(self, config, repository, archive_name, file_path, archive_label=None):
         '''
-        Given a configuration dict, a repository dict, an archive name, and the path of a file in
-        the archive, prepare to load the file's contents for eventual display in this widget. Actual
-        loading kicks off in on_mount() below.
+        Given a configuration dict, a repository dict, an archive name or ID to give Borg, the path
+        of a file in the archive, and an optional archive name to display (if the archive is
+        otherwise selected by ID), prepare to load the file's contents for eventual display in this
+        widget. Actual loading kicks off in on_mount() below.
         '''
         self.config = config
         self.repository = repository
         self.archive_name = archive_name
+        self.archive_label = archive_label or archive_name
         self.file_path = file_path
 
         super().__init__(classes='panel')

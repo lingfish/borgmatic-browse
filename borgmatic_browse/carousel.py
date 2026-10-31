@@ -51,6 +51,7 @@ def make_next_panel(focused_panel, option_id):
                 focused_panel.archive_name,
                 path_loaded=focused_panel.path_loaded,
                 path_components=(*focused_panel.path_components, option_id),
+                archive_label=focused_panel.archive_label,
             )
 
         if path_type == borgmatic_browse.archive.Path_type.FILE.value:
@@ -59,9 +60,45 @@ def make_next_panel(focused_panel, option_id):
                 focused_panel.repository,
                 focused_panel.archive_name,
                 file_path=os.path.sep.join((*focused_panel.path_components, option_id)),
+                archive_label=focused_panel.archive_label,
             )
 
     return None
+
+
+LOCATION_SEPARATOR = ' \u203a '
+
+
+def get_panel_location(panel):
+    '''
+    Given a panel widget, return a string describing where it is in the drill-down, for display in
+    the app's header, with its pieces joined by LOCATION_SEPARATOR: repository, archive, and path. A
+    panel that's not within any repository has an empty location.
+    '''
+    if not isinstance(
+        panel,
+        (
+            borgmatic_browse.archives_list.Archives_list,
+            borgmatic_browse.directory_list.Directory_list,
+            borgmatic_browse.file_preview.File_preview,
+        ),
+    ):
+        return ''
+
+    repository_label = panel.repository.get('label', panel.repository.get('path'))
+
+    if isinstance(panel, borgmatic_browse.archives_list.Archives_list):
+        return repository_label
+
+    path = (
+        panel.file_path
+        if isinstance(panel, borgmatic_browse.file_preview.File_preview)
+        else os.path.sep.join(panel.path_components)
+    )
+
+    return LOCATION_SEPARATOR.join(
+        piece for piece in (repository_label, panel.archive_label, path) if piece
+    )
 
 
 class Carousel(textual.containers.Horizontal):
@@ -99,6 +136,7 @@ class Carousel(textual.containers.Horizontal):
         self.focused_panel = self.panels[previous_panel_index]
         self.focused_panel.styles.display = 'block'
         self.focused_panel.focus()
+        self.app.sub_title = get_panel_location(self.focused_panel)
 
     def action_next(self, option_id):
         '''
@@ -123,6 +161,7 @@ class Carousel(textual.containers.Horizontal):
         self.focused_panel = next_panel
         self.focused_panel.focus()
         self.mount(self.focused_panel)
+        self.app.sub_title = get_panel_location(self.focused_panel)
 
     def on_option_list_option_highlighted(self, event):
         '''

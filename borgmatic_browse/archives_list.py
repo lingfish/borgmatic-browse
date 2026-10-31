@@ -1,4 +1,4 @@
-import rich.markup
+import rich.text
 import textual.widgets
 
 import borgmatic_browse.bindings
@@ -51,16 +51,16 @@ class Archives_list(textual.widgets.OptionList):
     def on_archive_loaded(self, archive):
         '''
         When an archive loads, add it as an option to this archives list, showing its time beside
-        its name. Escape the name because it might look like markup. But if we get a signal that all
-        path loading is complete, stop and remove our loading indicator.
+        its name. Make the prompt a rich.text.Text rather than a markup string, because a name might
+        look like markup. But if we get a signal that all path loading is complete, stop and remove
+        our loading indicator.
         '''
         if archive is borgmatic_browse.workers.LOADING_DONE:
             self.loading_timer.stop()
             self.remove_option('loading-indicator')
             return
 
-        name = rich.markup.escape(archive.name)
-        label_pieces = (name, '[dim](latest)[/dim]') if len(self.options) == 1 else (name,)
+        latest_pieces = ((' ', ''), ('(latest)', 'dim')) if len(self.options) == 1 else ()
         self.archive_names[archive.selector] = archive.name
 
         # Textual 6.0.0+ has self.highlighted_option, but we want to support older versions.
@@ -73,7 +73,10 @@ class Archives_list(textual.widgets.OptionList):
         self.add_options(
             (
                 textual.widgets.option_list.Option(
-                    f'[dim]{archive.time}[/dim]  {" ".join(label_pieces)}', id=archive.selector
+                    rich.text.Text.assemble(
+                        (archive.time, 'dim'), '  ', archive.name, *latest_pieces
+                    ),
+                    id=archive.selector,
                 ),
                 loading_indicator,
             ),
