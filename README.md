@@ -32,7 +32,8 @@ This is a modified version of that code. Modified from October 2026: the code mo
 are recorded in the git history.
 
 Like borgmatic, borgmatic-browse is licensed under the GNU General Public License version 3 or any
-later version (GPL-3.0-or-later). See [LICENSE](LICENSE). Copyright in the original code remains
+later version (GPL-3.0-or-later). See
+[LICENSE](https://github.com/lingfish/borgmatic-browse/blob/main/LICENSE). Copyright in the original code remains
 with its authors.
 
 ## Installation
