@@ -18,7 +18,8 @@ jobs:
         with:
           # hatch-vcs derives the package version from git tags.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v10
+      # setup-uv publishes no floating major version tag, so pin the full version.
+      - uses: astral-sh/setup-uv@v10.3.3
       - name: Build sdist and wheel
         run: uv build
       - uses: actions/upload-artifact@v7
