@@ -51,3 +51,22 @@ def test_file_preview_on_file_preview_loaded_with_file_contents_displays_content
     flexmock(file_preview).should_receive('write').once()
 
     file_preview.on_file_preview_loaded('hi')
+
+
+def test_file_preview_on_file_preview_loaded_with_loading_failed_displays_error():
+    loading_timer = flexmock()
+    loading_timer.should_receive('stop').once()
+    flexmock(module.borgmatic_browse.loading).should_receive(
+        'add_inline_loading_indicator'
+    ).and_return(loading_timer)
+    file_preview = module.File_preview(
+        config=flexmock(), repository=flexmock(), archive_name='archive', file_path='foo.txt'
+    )
+    flexmock(file_preview).should_receive('write').with_args(
+        'Cannot display a preview for this file'
+    ).never()
+    flexmock(file_preview).should_receive('write').with_args(
+        'Error loading this file. Press v to view the logs.'
+    ).once()
+
+    file_preview.on_file_preview_loaded(module.borgmatic_browse.workers.LOADING_FAILED)

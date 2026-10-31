@@ -1,6 +1,8 @@
 import logging
 import os
+import subprocess
 
+import rich.markup
 import textual
 import textual.signal
 
@@ -10,9 +12,31 @@ logger = logging.getLogger('__name__')
 
 
 LOADING_DONE = object()
+LOADING_FAILED = object()
+
+# The errors that loading from Borg is expected to raise, e.g. for a missing repository, a Borg
+# binary that can't be run, or output that can't be parsed. Textual exits the whole app when a worker
+# raises, so anything else remains fatal.
+LOADING_ERRORS = (subprocess.CalledProcessError, OSError, ValueError)
 
 # How many archive paths to publish (and repaint for) at a time.
 BATCH_SIZE = 200
+
+
+def report_loading_error(browse_app, description, error):
+    '''
+    Given a running Browse_app instance, a description of what failed, and the exception raised, log
+    the error and show it as a notification, so the user finds out why loading stopped. Prefer a
+    failed command's own output over the exception's text, since the output says what went wrong
+    rather than just which command failed.
+
+    Escape the notification because the message contains arbitrary text like Borg output and paths,
+    which might look like Rich markup.
+    '''
+    message = f"{description}: {getattr(error, 'output', None) or error}"
+
+    logger.error(message)
+    browse_app.notify(rich.markup.escape(message), severity='error')
 
 
 class Directory(dict):
@@ -52,7 +76,12 @@ def add_repository_archives(browse_app, archive_loaded, config, repository):
     This function runs in a separate thread from the main UI. When loading is complete, publish a
     loading done signal.
     '''
-    archives_data = borgmatic_browse.archive.get_repository_archives(config, repository)
+    try:
+        archives_data = borgmatic_browse.archive.get_repository_archives(config, repository)
+    except LOADING_ERRORS as error:
+        report_loading_error(browse_app, 'Error listing repository', error)
+        archive_loaded.publish(LOADING_DONE)
+        return
 
     # Reverse the archives, so the common case of accessing the latest archive is easy because it's
     # at the top.
@@ -213,19 +242,24 @@ def load_archive_paths(browse_app, path_loaded, config, repository, archive_name
     Publish in batches rather than one path at a time so that widgets don't have to process (and
     repaint for) every single path.
 
+    If loading fails partway through, report the error and keep any paths that already loaded.
+
     This function runs in a separate thread from the main UI. When loading is complete, publish a
     loading done signal.
     '''
     batch = []
 
-    for archive_path in borgmatic_browse.archive.get_archive_paths(
-        config, repository, archive_name
-    ):
-        batch.append(archive_path)
+    try:
+        for archive_path in borgmatic_browse.archive.get_archive_paths(
+            config, repository, archive_name
+        ):
+            batch.append(archive_path)
 
-        if len(batch) >= BATCH_SIZE:
-            path_loaded.publish(tuple(batch))
-            batch.clear()
+            if len(batch) >= BATCH_SIZE:
+                path_loaded.publish(tuple(batch))
+                batch.clear()
+    except LOADING_ERRORS as error:
+        report_loading_error(browse_app, f'Error listing archive {archive_name}', error)
 
     if batch:
         path_loaded.publish(tuple(batch))
@@ -256,13 +290,19 @@ def load_file_preview(
     '''
     Given a running Browse_app instance, a File_preview_loaded instance, a configuration dict, a
     repository dict, an archive name, and the path of a file in that archive, load the contents of
-    the file and write it into the given file preview widget.
+    the file and write it into the given file preview widget. If loading fails, report the error and
+    publish a loading failed signal instead.
 
     This function runs in a separate thread from the main UI. When loading is complete, publish a
     loading done signal.
     '''
-    file_contents = borgmatic_browse.archive.get_archive_file_content(
-        config, repository, archive_name, file_path
-    )
+    try:
+        file_contents = borgmatic_browse.archive.get_archive_file_content(
+            config, repository, archive_name, file_path
+        )
+    except LOADING_ERRORS as error:
+        report_loading_error(browse_app, f'Error loading {file_path}', error)
+        file_preview_loaded.publish(LOADING_FAILED)
+        return
 
     file_preview_loaded.publish(file_contents)

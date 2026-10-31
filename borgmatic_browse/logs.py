@@ -2,6 +2,7 @@ import contextlib
 import logging
 
 import borgmatic.logger
+import rich.markup
 import textual._context
 import textual.widgets
 
@@ -24,7 +25,8 @@ class Rich_color_formatter(logging.Formatter):
     def format(self, record):
         '''
         Given a log record, format it with Rich-compatibe color markup corresponding to its log
-        level.
+        level. Escape the message itself because it contains arbitrary text like Borg output and
+        paths, and something resembling an unmatched closing tag would raise in the logs widget.
         '''
         borgmatic.logger.add_custom_log_levels()
 
@@ -38,7 +40,7 @@ class Rich_color_formatter(logging.Formatter):
         }.get(record.levelno)
         record.prefix = f'{self.prefix}: ' if self.prefix else ''
 
-        return f'[{color}]{super().format(record)}[/{color}]'
+        return f'[{color}]{rich.markup.escape(super().format(record))}[/{color}]'
 
 
 class Log_message(textual.message.Message):

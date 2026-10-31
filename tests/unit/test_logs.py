@@ -1,3 +1,5 @@
+import rich.markup
+import rich.text
 from flexmock import flexmock
 
 from borgmatic_browse import logs as module
@@ -15,6 +17,21 @@ def test_rich_color_formatter_format_colors_log_record_based_on_level():
     )
 
     assert formatted == '[bright_red]oh no[/bright_red]'
+
+
+def test_rich_color_formatter_format_escapes_rich_markup_in_message():
+    formatted = module.Rich_color_formatter().format(
+        module.logging.makeLogRecord(
+            dict(
+                levelno=module.logging.ERROR,
+                levelname='ERROR',
+                msg='bad [/nope] path',
+            )
+        ),
+    )
+
+    assert formatted == f"[bright_red]{rich.markup.escape('bad [/nope] path')}[/bright_red]"
+    rich.text.Text.from_markup(formatted)
 
 
 def test_rich_color_formatter_format_includes_prefix():

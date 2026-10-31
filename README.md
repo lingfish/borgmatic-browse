@@ -67,7 +67,6 @@ Press `v` in the UI to see the logs panel and `q` to quit.
 
 ## Known issues
 
-* A Borg error, such as a missing repository, crashes the app.
 * Only archives matching `{hostname}-*` are listed by default, because that's borgmatic's default
   archive name format. Set `match_archives` or `archive_name_format` to change this.
 * Archive names are used as option IDs, which breaks on Borg 2, where they aren't unique

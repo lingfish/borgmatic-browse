@@ -1,6 +1,10 @@
+import subprocess
+
 from flexmock import flexmock
 
 import borgmatic_browse.app
+import borgmatic_browse.archive
+import borgmatic_browse.archives_list
 import borgmatic_browse.configuration_files_list
 import borgmatic_browse.logs
 import borgmatic_browse.repositories_list
@@ -80,3 +84,33 @@ async def test_browse_app_key_toggles_logs_panel():
         await pilot.press('v')
         await pilot.pause()
         assert logs_panel.styles.display == 'block'
+
+
+async def test_browse_app_with_borg_error_loading_archives_stays_running_and_notifies():
+    app = borgmatic_browse.app.Browse_app(
+        configs={
+            'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
+        }
+    )
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.archive).should_receive('get_repository_archives').and_raise(
+        subprocess.CalledProcessError(13, 'borg list', output='Repository /x does not exist.')
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press('enter')
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+
+        assert app._exception is None
+        assert app.is_running
+
+        archives_list = app.query_one(borgmatic_browse.archives_list.Archives_list)
+        assert app.focused is archives_list
+        assert 'loading-indicator' not in {option.id for option in archives_list.options}
+        assert any('does not exist' in notification.message for notification in app._notifications)
+
+        await pilot.press('left')
+        await pilot.pause()
+
+        assert isinstance(app.focused, borgmatic_browse.repositories_list.Repositories_list)

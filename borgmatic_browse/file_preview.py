@@ -72,12 +72,15 @@ class File_preview(textual.widgets.RichLog):
 
     def on_file_preview_loaded(self, file_contents):
         '''
-        When a file loads, write its contents (syntax highlighted) to this file preview widget.
+        When a file loads, write its contents (syntax highlighted) to this file preview widget. But
+        if loading failed, say so instead.
         '''
         self.loading_timer.stop()
         self.clear()
 
-        if file_contents is None:
+        if file_contents is borgmatic_browse.workers.LOADING_FAILED:
+            self.write('Error loading this file. Press v to view the logs.')
+        elif file_contents is None:
             self.write('Cannot display a preview for this file')
         else:
             # Only pass the file path and not its contents to guess_lexer(). Passing the contents is
