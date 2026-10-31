@@ -42,13 +42,14 @@ dev = [
 requires = ["hatchling>=1.27", "hatch-vcs>=0.5"]
 build-backend = "hatchling.build"
 
-# The version comes from git tags: a "v0.1.0" tag builds version 0.1.0, and any later untagged
-# commit builds a 0.1.1.devN pre-release. Drop the "+g<hash>" local version suffix, which PyPI and
-# TestPyPI reject.
+# The version comes from git tags: a "0.1.0" tag builds version 0.1.0, and any later untagged
+# commit builds a 0.1.1.devN pre-release. Only bare MAJOR.MINOR.PATCH tags count as versions. Drop
+# the "+g<hash>" local version suffix, which PyPI and TestPyPI reject.
 [tool.hatch.version]
 source = "vcs"
 
 [tool.hatch.version.raw-options]
+tag_regex = '^(?P<version>\d+\.\d+\.\d+)$'
 local_scheme = "no-local-version"
 
 [tool.hatch.build.targets.wheel]

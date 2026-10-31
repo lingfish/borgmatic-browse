@@ -95,12 +95,16 @@ uv run borgmatic-browse -c /path/to/config.yaml -v 1
 
 ### Releasing
 
+Versions follow [semantic versioning](https://semver.org/): MAJOR.MINOR.PATCH, with no `v`
+prefix. While the major version is 0, a minor version bump may include breaking changes, such as a
+new borgmatic version requirement.
+
 The package version comes from git tags, via hatch-vcs. To release, tag a commit on `main` and
 push the tag:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag 0.1.0
+git push origin 0.1.0
 ```
 
 The release workflow in GitHub Actions then builds the sdist and wheel and publishes them to PyPI
