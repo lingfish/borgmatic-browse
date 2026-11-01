@@ -31,6 +31,7 @@ borgmatic-browse = "borgmatic_browse.cli:main"
 [dependency-groups]
 dev = [
     "flexmock>=0.13.0",
+    "pyte",
     "pytest>=9",
     "pytest-asyncio>=1.4",
     "pytest-cov>=7",
@@ -131,6 +132,12 @@ multiline-quotes = "single"
 known-first-party = ["borgmatic_browse"]
 
 [tool.ruff.lint.per-file-ignores]
+"tests/smoke/*.py" = [
+    "PLR2004",  # magic value
+    "S101",  # asserts
+    "S603",  # subprocess call
+    "T201",  # print statement
+]
 "tests/**/*.py" = [
     "C406",  # unnecessary list literal
     "N802",  # uppercase in function name
