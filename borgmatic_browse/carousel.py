@@ -52,6 +52,8 @@ def make_next_panel(focused_panel, option_id):
                 path_loaded=focused_panel.path_loaded,
                 path_components=(*focused_panel.path_components, option_id),
                 archive_label=focused_panel.archive_label,
+                sort_mode=focused_panel.sort_mode,
+                sort_reversed=focused_panel.sort_reversed,
             )
 
         if path_type == borgmatic_browse.archive.Path_type.FILE.value:

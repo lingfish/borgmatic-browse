@@ -42,3 +42,47 @@ def test_format_time_with_utc_offset_converts_to_local_time_across_midnight(auck
 
 def test_format_time_with_z_suffix_converts_to_local_time(auckland_time):
     assert module.format_time('2026-10-31T12:40:59Z') == '2026-11-01 01:40'
+
+
+def test_get_timestamp_returns_float():
+    assert isinstance(module.get_timestamp('2026-10-31T17:40:59'), float)
+
+
+def test_get_timestamp_with_utc_offset_returns_seconds_since_epoch():
+    expected = datetime.datetime(2026, 10, 31, 6, 40, 59, tzinfo=datetime.UTC).timestamp()
+
+    assert module.get_timestamp('2026-10-31T17:40:59+11:00') == expected
+
+
+def test_get_timestamp_with_z_suffix_returns_seconds_since_epoch():
+    expected = datetime.datetime(2026, 10, 31, 12, 40, 59, tzinfo=datetime.UTC).timestamp()
+
+    assert module.get_timestamp('2026-10-31T12:40:59Z') == expected
+
+
+def test_get_timestamp_keeps_fractional_seconds():
+    assert module.get_timestamp('2026-10-31T12:40:59.5Z') == (
+        module.get_timestamp('2026-10-31T12:40:59Z') + 0.5
+    )
+
+
+def test_get_timestamp_with_naive_time_assumes_local_time(auckland_time):
+    # Auckland is UTC+13 on this date.
+    expected = datetime.datetime(2026, 10, 31, 4, 40, 59, tzinfo=datetime.UTC).timestamp()
+
+    assert module.get_timestamp('2026-10-31T17:40:59') == expected
+
+
+def test_get_timestamp_with_invalid_time_raises():
+    with pytest.raises(ValueError):
+        module.get_timestamp('yesterday')
+
+
+def test_get_timestamp_orders_times_across_a_daylight_saving_change():
+    # Australian daylight saving time ends at 03:00 local on 2026-04-05, so 02:30 at +11:00 is
+    # earlier than 02:10 at +10:00, even though it sorts later as a string.
+    earlier = '2026-04-05T02:30:00+11:00'
+    later = '2026-04-05T02:10:00+10:00'
+
+    assert earlier > later
+    assert module.get_timestamp(earlier) < module.get_timestamp(later)

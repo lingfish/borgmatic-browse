@@ -10,13 +10,18 @@ OPTION_LIST_BINDINGS = (
         key='down,j', action='cursor_down', description='scroll down', show=True, priority=True
     ),
     textual.binding.Binding(
-        key='pageup', action='page_up', description='page up', show=True, priority=True
+        key='pageup', action='page_up', description='page up', show=False, priority=True
     ),
     textual.binding.Binding(
-        key='pagedown', action='page_down', description='page down', show=True, priority=True
+        key='pagedown', action='page_down', description='page down', show=False, priority=True
     ),
     textual.binding.Binding(
         key='enter', action='select', description='select', show=True, priority=True
     ),
     textual.binding.Binding(key='right,l', action='select', description='select', show=False),
+)
+
+SORTABLE_BINDINGS = (
+    textual.binding.Binding(key='s', action='cycle_sort', description='sort'),
+    textual.binding.Binding(key='r', action='reverse_sort', description='reverse'),
 )

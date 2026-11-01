@@ -8,6 +8,7 @@ import borgmatic_browse.bindings
 import borgmatic_browse.icons
 import borgmatic_browse.loading
 import borgmatic_browse.sizes
+import borgmatic_browse.sorting
 import borgmatic_browse.times
 import borgmatic_browse.workers
 
@@ -88,7 +89,8 @@ def make_directory_list_option(archive_path, relative_path_components, size, mti
     option is the directory containing the path, so it has no link target of its own.
 
     Since the option's prompt is a Rich renderable rather than a string, also stash plain text for
-    the same information on the option as prompt_text, plus its path type as path_type. That way,
+    the same information on the option as prompt_text, plus its path type as path_type, its size as
+    size, and its time as timestamp, or None if it has no time. That way,
     consumers like the sort in add_archive_paths() or the next panel lookup in the carousel don't
     have to see through the renderable.
     '''
@@ -113,6 +115,8 @@ def make_directory_list_option(archive_path, relative_path_components, size, mti
         )
     )
     option.path_type = path_type
+    option.size = size
+    option.timestamp = borgmatic_browse.times.get_timestamp(mtime) if mtime else None
 
     return option
 
@@ -193,16 +197,14 @@ def add_archive_paths(
             # renderable, so that the check above still suppresses no-op repaints below.
             existing_option.prompt_text = option.prompt_text
             existing_option.path_type = option.path_type
+            existing_option.size = option.size
+            existing_option.timestamp = option.timestamp
 
     # If there aren't actually any new options to add, we're done after the size updates above.
     if not new_options:
         return
 
-    sorted_options = sorted(
-        (*directory_list.options, *new_options),
-        # The loading indicator "option" always goes to the bottom.
-        key=lambda option: ((option.id == 'loading-indicator'), option.prompt_text),
-    )
+    sorted_options = directory_list.sort_options((*directory_list.options, *new_options))
 
     # Retain the highlighted option position even as other options load around it.
     directory_list.clear_options()
@@ -214,14 +216,20 @@ def add_archive_paths(
     )
 
 
-class Directory_list(textual.widgets.OptionList):
+class Directory_list(borgmatic_browse.sorting.Sortable, textual.widgets.OptionList):
     '''
     A widget for selecting a path from among the contents of a particular directory in a Borg
     archive. The item selection event is handled in a Carousel instance, the parent widget of a
     Directory_list.
     '''
 
-    BINDINGS = borgmatic_browse.bindings.OPTION_LIST_BINDINGS
+    BINDINGS = (
+        *borgmatic_browse.bindings.OPTION_LIST_BINDINGS,
+        *borgmatic_browse.bindings.SORTABLE_BINDINGS,
+    )
+    SORT_MODES = ('name', 'size', 'time')
+    DEFAULT_SORT_MODE = 'name'
+    DEFAULT_REVERSED = {'name': False, 'size': True, 'time': True}  # noqa: RUF012
 
     def __init__(
         self,
@@ -231,14 +239,16 @@ class Directory_list(textual.widgets.OptionList):
         path_loaded=None,
         path_components=None,
         archive_label=None,
+        sort_mode=None,
+        sort_reversed=None,
     ):
         '''
         Given a configuration dict, a repository dict, an archive name or ID to give Borg, an
         optional Archive_path_loaded instance for signalling new paths as they load, an optional
         tuple of path components indicating this directory's position in the backed up filesystem,
-        and an optional archive name to display (if the archive is otherwise selected by ID),
-        prepare to load paths from the archive for eventual display in this widget. Actual loading
-        kicks off in on_mount() below.
+        an optional archive name to display (if the archive is otherwise selected by ID), and an
+        optional sort mode and direction to start with, prepare to load paths from the archive for
+        eventual display in this widget. Actual loading kicks off in on_mount() below.
         '''
         self.config = config
         self.repository = repository
@@ -248,6 +258,7 @@ class Directory_list(textual.widgets.OptionList):
         self.highlighted_option_changed = False
 
         super().__init__(classes='panel')
+        self.init_sort(sort_mode, sort_reversed)
 
         if self.path_components:
             # Lay ".." out like the other options, even though it has no size of its own.
@@ -322,6 +333,40 @@ class Directory_list(textual.widgets.OptionList):
         if title != self.border_title:
             self.border_title = title
 
+    def sort_options(self, options):
+        '''
+        Given options, return them in display order for the current sort mode and direction. Sort
+        only within groups, in this order: the ".." option, directories, everything else, and the
+        loading indicator.
+        '''
+        sort_key = {
+            'name': lambda option: option.id,
+            'size': lambda option: (option.size, option.id),
+            'time': lambda option: (
+                float('-inf') if option.timestamp is None else option.timestamp,
+                option.id,
+            ),
+        }[self.sort_mode]
+        path_options = [
+            option for option in options if option.id not in {'..', 'loading-indicator'}
+        ]
+        directory_type = borgmatic_browse.archive.Path_type.DIRECTORY.value
+
+        return [
+            *(option for option in options if option.id == '..'),
+            *sorted(
+                (option for option in path_options if option.path_type == directory_type),
+                key=sort_key,
+                reverse=self.sort_reversed,
+            ),
+            *sorted(
+                (option for option in path_options if option.path_type != directory_type),
+                key=sort_key,
+                reverse=self.sort_reversed,
+            ),
+            *(option for option in options if option.id == 'loading-indicator'),
+        ]
+
     def on_archive_path_loaded(self, data):
         '''
         When a batch of archive paths loads, add them as options to this directory list. But if we
@@ -330,6 +375,8 @@ class Directory_list(textual.widgets.OptionList):
         if data is borgmatic_browse.workers.LOADING_DONE:
             self.timer.stop()
             self.remove_option('loading-indicator')
+            # Directory sizes keep changing while loading, even when no new options arrive.
+            self.apply_sort()
             self.update_border_title()
             return
 

@@ -733,3 +733,73 @@ async def test_header_with_markup_like_archive_name_in_sub_title_shows_it_litera
 
         assert app._exception is None
         assert SEP.join(('mine', 'bad[/name]', 'foo')) in str(header_title.visual)
+
+
+def make_focused_directory_list(**kwargs):
+    config = {'repositories': [{'path': 'test.borg'}]}
+    flexmock(borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    flexmock(borgmatic_browse.workers).should_receive('load_archive_paths')
+    flexmock(borgmatic_browse.workers).should_receive('Archive_path_loaded').replace_with(
+        flexmock(path_hierarchy={'etc': borgmatic_browse.workers.Directory()}, complete=False),
+    )
+    flexmock(borgmatic_browse.directory_list.Directory_list).should_receive('app').and_return(
+        flexmock()
+    )
+    focused_panel = borgmatic_browse.directory_list.Directory_list(
+        config, config['repositories'][0], 'archive', **kwargs
+    )
+    flexmock(focused_panel).should_receive('get_option').and_return(flexmock(path_type='d'))
+
+    return focused_panel
+
+
+@pytest.mark.parametrize(
+    'sort_mode,sort_reversed',
+    (('size', False), ('size', True), ('time', False), ('name', True)),
+)
+def test_make_next_panel_with_directory_list_passes_sort_to_child_directory_list(
+    sort_mode, sort_reversed
+):
+    focused_panel = make_focused_directory_list(sort_mode=sort_mode, sort_reversed=sort_reversed)
+
+    directory_list = module.make_next_panel(focused_panel=focused_panel, option_id='etc')
+
+    assert directory_list.sort_mode == sort_mode
+    assert directory_list.sort_reversed is sort_reversed
+
+
+def test_make_next_panel_with_directory_list_passes_changed_sort_to_child_directory_list():
+    focused_panel = make_focused_directory_list()
+    focused_panel.set_sort_mode('size')
+    focused_panel.action_reverse_sort()
+
+    directory_list = module.make_next_panel(focused_panel=focused_panel, option_id='etc')
+
+    assert directory_list.sort_mode == 'size'
+    assert directory_list.sort_reversed is False
+    assert directory_list.border_subtitle == 'sort: size ↑'
+
+
+def test_make_next_panel_with_archives_list_starts_directory_list_at_default_sort():
+    config = {'repositories': [{'path': 'test.borg'}]}
+    flexmock(borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    flexmock(borgmatic_browse.workers).should_receive('add_repository_archives')
+    flexmock(borgmatic_browse.workers).should_receive('load_archive_paths')
+    flexmock(borgmatic_browse.archives_list.Archives_list).should_receive('app').and_return(
+        flexmock()
+    )
+    flexmock(borgmatic_browse.directory_list.Directory_list).should_receive('app').and_return(
+        flexmock()
+    )
+    archives_list = borgmatic_browse.archives_list.Archives_list(
+        config=config, repository=config['repositories'][0]
+    )
+    archives_list.archive_names['abc123'] = 'archive'
+    archives_list.set_sort_mode('name')
+    archives_list.action_reverse_sort()
+
+    directory_list = module.make_next_panel(focused_panel=archives_list, option_id='abc123')
+
+    assert directory_list.sort_mode == 'name'
+    assert directory_list.sort_reversed is False
+    assert directory_list.border_subtitle == 'sort: name ↑'

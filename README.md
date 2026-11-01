@@ -63,7 +63,9 @@ borgmatic-browse [-c PATH] [-v VERBOSITY] [--override OPTION.SUBOPTION=VALUE]
   `verbosity` configuration option.
 * `--override`: Override a configuration option. Repeatable.
 
-Press `v` in the UI to see the logs panel and `q` to quit.
+Press `v` in the UI to see the logs panel and `q` to quit. In a list of archives or paths, press `s`
+to change what it's sorted by and `r` to reverse the order, or use the command palette with `c`.
+Directories stay above files however a list is sorted.
 
 ## Known issues
 

@@ -1,4 +1,5 @@
 import contextlib
+import functools
 
 import psutil
 import textual.app
@@ -9,6 +10,7 @@ import borgmatic_browse.carousel
 import borgmatic_browse.configuration_files_list
 import borgmatic_browse.logs
 import borgmatic_browse.repositories_list
+import borgmatic_browse.sorting
 
 
 def terminate_child_processes():
@@ -58,17 +60,34 @@ class Browse_app(textual.app.App):
 
         super().__init__()
 
-    def get_system_commands(self, screen):  # pragma: no cover
+    def get_system_commands(self, screen):
         '''
         Remove the screenshot system command because it produces broken screenshots. (Emoji
         weirdness, etc.) Also remove minimize and maximize because they don't accomplish much with
-        out particular layout.
+        out particular layout. And if the focused panel can be sorted, add commands for sorting it.
         '''
         yield from (
             command
             for command in super().get_system_commands(screen)
             if command.title not in {'Screenshot', 'Minimize', 'Maximize'}
         )
+
+        for carousel in screen.query(borgmatic_browse.carousel.Carousel):
+            panel = carousel.focused_panel
+
+            if isinstance(panel, borgmatic_browse.sorting.Sortable):
+                for mode in panel.SORT_MODES:
+                    yield textual.app.SystemCommand(
+                        f'Sort by {mode}',
+                        f'Sort this list by {mode}',
+                        functools.partial(panel.set_sort_mode, mode),
+                    )
+
+                yield textual.app.SystemCommand(
+                    'Reverse sort order',
+                    'Reverse the order of this list',
+                    panel.action_reverse_sort,
+                )
 
     def compose(self):
         '''

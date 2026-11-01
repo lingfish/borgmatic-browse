@@ -25,15 +25,33 @@ def rendered_text(renderable):
     return capture.get()
 
 
-def make_option(prompt, option_id):
+def make_option(prompt, option_id, path_type='-', size=0, timestamp=None):
     '''
     Make a textual.widgets.option_list.Option with the given prompt and ID, stashing the prompt as
-    prompt_text the way that real directory list and loading indicator options do.
+    prompt_text the way that real directory list and loading indicator options do, along with the
+    path type, size and timestamp that real directory list options carry.
     '''
     option = textual.widgets.option_list.Option(prompt, id=option_id)
     option.prompt_text = prompt
+    option.path_type = path_type
+    option.size = size
+    option.timestamp = timestamp
 
     return option
+
+
+class Bare_directory_list(module.Directory_list):
+    '''
+    A Directory_list without the loading indicator, border title and parent option of a real one, so
+    that tests can place options and a path hierarchy directly. It still sorts like a real one.
+    '''
+
+    def __init__(self, path_components, path_loaded):
+        textual.widgets.OptionList.__init__(self)
+        self.path_components = path_components
+        self.path_loaded = path_loaded
+        self.highlighted_option_changed = False
+        self.init_sort()
 
 
 def test_make_size_path_prompt_aligns_paths_regardless_of_size_length():
@@ -54,9 +72,7 @@ def test_make_size_path_prompt_aligns_bytes_number_with_larger_size_numbers():
 
 
 def test_add_archive_paths_with_only_duplicate_paths_bails():
-    directory_list = textual.widgets.OptionList()
-    directory_list.path_components = ('etc',)
-    directory_list.path_loaded = flexmock(path_hierarchy={})
+    directory_list = Bare_directory_list(('etc',), flexmock(path_hierarchy={}))
     directory_list.add_option(make_option('foo', option_id='foo'))
     directory_list.add_option(make_option('bar', option_id='bar'))
     config = {'repositories': [{'path': 'test.borg'}]}
@@ -76,9 +92,7 @@ def test_add_archive_paths_with_only_duplicate_paths_bails():
 
 
 def test_add_archive_paths_adds_ands_sorts_and_filters_and_deduplicates():
-    directory_list = textual.widgets.OptionList()
-    directory_list.path_components = ('etc',)
-    directory_list.path_loaded = flexmock(path_hierarchy={})
+    directory_list = Bare_directory_list(('etc',), flexmock(path_hierarchy={}))
     directory_list.add_option(make_option('📄 foo', option_id='foo'))
     directory_list.add_option(make_option('📄 bar', option_id='bar'))
     directory_list.highlighted = 1
@@ -125,9 +139,7 @@ def test_add_archive_paths_updates_existing_option_size():
             path_components=('etc', 'foo', file_name),
         )
 
-    directory_list = textual.widgets.OptionList()
-    directory_list.path_components = ('etc',)
-    directory_list.path_loaded = flexmock(path_hierarchy=hierarchy)
+    directory_list = Bare_directory_list(('etc',), flexmock(path_hierarchy=hierarchy))
     # The option's size as of before baz.txt loaded.
     directory_list.add_option(make_option('📁 foo (1.02 kB)', option_id='foo'))
     config = {'repositories': [{'path': 'test.borg'}]}
@@ -155,9 +167,7 @@ def test_add_archive_paths_does_not_repaint_unchanged_size():
         hierarchy=hierarchy,
         path_components=('etc', 'foo', 'bar.txt'),
     )
-    directory_list = textual.widgets.OptionList()
-    directory_list.path_components = ('etc',)
-    directory_list.path_loaded = flexmock(path_hierarchy=hierarchy)
+    directory_list = Bare_directory_list(('etc',), flexmock(path_hierarchy=hierarchy))
     directory_list.add_option(make_option('📁 foo (2.05 kB)', option_id='foo'))
     config = {'repositories': [{'path': 'test.borg'}]}
     flexmock(directory_list).should_receive('replace_option_prompt').never()
@@ -184,9 +194,7 @@ def test_add_archive_paths_ignores_link_target_for_directory_row():
         hierarchy=hierarchy,
         path_components=('etc', 'foo', 'link'),
     )
-    directory_list = textual.widgets.OptionList()
-    directory_list.path_components = ('etc',)
-    directory_list.path_loaded = flexmock(path_hierarchy=hierarchy)
+    directory_list = Bare_directory_list(('etc',), flexmock(path_hierarchy=hierarchy))
     directory_list.add_option(make_option('📁 foo (0 B)', option_id='foo'))
     config = {'repositories': [{'path': 'test.borg'}]}
     flexmock(directory_list).should_receive('replace_option_prompt').never()
@@ -214,9 +222,7 @@ def test_add_archive_paths_computes_one_size_update_per_directory_for_a_batch():
         module.borgmatic_browse.workers.record_path(
             archive_path, hierarchy, ('etc', 'foo', archive_path.file_path.rsplit('/', 1)[1])
         )
-    directory_list = textual.widgets.OptionList()
-    directory_list.path_components = ('etc',)
-    directory_list.path_loaded = flexmock(path_hierarchy=hierarchy)
+    directory_list = Bare_directory_list(('etc',), flexmock(path_hierarchy=hierarchy))
     directory_list.add_option(make_option('📁 foo (100 B)', option_id='foo'))
     config = {'repositories': [{'path': 'test.borg'}]}
     flexmock(directory_list).should_receive('replace_option_prompt').once()
@@ -235,9 +241,7 @@ def test_add_archive_paths_computes_one_size_update_per_directory_for_a_batch():
 
 
 def test_add_archive_paths_highlights_first_option_if_highlight_has_not_changed():
-    directory_list = textual.widgets.OptionList()
-    directory_list.path_components = ('etc',)
-    directory_list.path_loaded = flexmock(path_hierarchy={})
+    directory_list = Bare_directory_list(('etc',), flexmock(path_hierarchy={}))
     directory_list.add_option(make_option('📄 foo', option_id='foo'))
     directory_list.add_option(make_option('📄 bar', option_id='bar'))
     directory_list.highlighted = None
@@ -265,9 +269,7 @@ def test_add_archive_paths_highlights_first_option_if_highlight_has_not_changed(
 
 
 def test_add_archive_paths_retains_loading_indicator_at_bottom():
-    directory_list = textual.widgets.OptionList()
-    directory_list.path_components = ('etc',)
-    directory_list.path_loaded = flexmock(path_hierarchy={})
+    directory_list = Bare_directory_list(('etc',), flexmock(path_hierarchy={}))
     directory_list.add_option(make_option('📄 foo', option_id='foo'))
     directory_list.add_option(make_option('📄 bar', option_id='bar'))
     directory_list.add_option(make_option('loading!!!', option_id='loading-indicator'))
@@ -535,9 +537,7 @@ def make_loaded_directory_list():
     signal.
     '''
     path_loaded = module.borgmatic_browse.workers.Archive_path_loaded(owner=flexmock(), name='Bob')
-    directory_list = textual.widgets.OptionList()
-    directory_list.path_components = ()
-    directory_list.path_loaded = path_loaded
+    directory_list = Bare_directory_list((), path_loaded)
 
     return directory_list, path_loaded
 
@@ -752,3 +752,168 @@ async def test_directory_list_paints_file_size_then_time_then_name(auckland_time
 
         assert app._exception is None
         assert line.strip() == '1.02 kB  2026-11-01 01:40  📄 a.txt'
+
+
+def test_add_archive_paths_records_size_and_timestamp_on_new_options():
+    directory_list, path_loaded = make_loaded_directory_list()
+
+    load_batch(
+        directory_list,
+        path_loaded,
+        (
+            module.borgmatic_browse.archive.Archive_path(
+                '-', 'a.txt', '', 3, '2026-10-31T17:40:59+11:00'
+            ),
+            module.borgmatic_browse.archive.Archive_path('-', 'b.txt', '', 4),
+        ),
+    )
+
+    assert directory_list.get_option('a.txt').size == 3
+    assert directory_list.get_option('a.txt').timestamp == (
+        module.borgmatic_browse.times.get_timestamp('2026-10-31T17:40:59+11:00')
+    )
+    assert directory_list.get_option('b.txt').size == 4
+    assert directory_list.get_option('b.txt').timestamp is None
+
+
+def test_add_archive_paths_updates_existing_option_size_and_timestamp_when_prompt_changes():
+    directory_list, path_loaded = make_loaded_directory_list()
+    load_batch(
+        directory_list,
+        path_loaded,
+        (module.borgmatic_browse.archive.Archive_path('-', 'a.txt', '', 3, '2026-10-31T17:40:59'),),
+    )
+
+    load_batch(
+        directory_list,
+        path_loaded,
+        (module.borgmatic_browse.archive.Archive_path('-', 'a.txt', '', 9, '2026-11-01T09:52:52'),),
+    )
+
+    assert directory_list.get_option('a.txt').size == 9
+    assert directory_list.get_option('a.txt').timestamp == (
+        module.borgmatic_browse.times.get_timestamp('2026-11-01T09:52:52')
+    )
+
+
+def test_add_archive_paths_updates_growing_directory_size_on_existing_option():
+    directory_list, path_loaded = make_loaded_directory_list()
+    load_batch(
+        directory_list,
+        path_loaded,
+        (module.borgmatic_browse.archive.Archive_path('-', 'etc/a.txt', '', 3),),
+    )
+    assert directory_list.get_option('etc').size == 3
+
+    load_batch(
+        directory_list,
+        path_loaded,
+        (module.borgmatic_browse.archive.Archive_path('-', 'etc/b.txt', '', 4),),
+    )
+
+    assert directory_list.get_option('etc').size == 7
+
+
+def test_add_archive_paths_sorts_with_the_directory_lists_sort_options():
+    directory_list = Bare_directory_list(('etc',), flexmock(path_hierarchy={}))
+    directory_list.add_option(make_option('📄 foo', option_id='foo'))
+    config = {'repositories': [{'path': 'test.borg'}]}
+    flexmock(directory_list).should_call('sort_options').once()
+
+    module.add_archive_paths(
+        directory_list=directory_list,
+        config=config,
+        repository=config['repositories'][0],
+        archive_name='archive',
+        archive_paths=(
+            flexmock(path_type='-', file_path='etc/bar', link_target='', size=0, mtime=None),
+        ),
+    )
+
+    assert [option.id for option in directory_list.options] == ['bar', 'foo']
+
+
+def test_add_archive_paths_puts_new_option_in_sorted_position_for_current_sort():
+    directory_list, path_loaded = make_loaded_directory_list()
+    load_batch(
+        directory_list,
+        path_loaded,
+        (
+            module.borgmatic_browse.archive.Archive_path('-', 'small', '', 1),
+            module.borgmatic_browse.archive.Archive_path('-', 'big', '', 100),
+        ),
+    )
+    directory_list.set_sort_mode('size')
+    assert [option.id for option in directory_list.options] == ['big', 'small']
+
+    load_batch(
+        directory_list,
+        path_loaded,
+        (
+            module.borgmatic_browse.archive.Archive_path('-', 'medium', '', 10),
+            module.borgmatic_browse.archive.Archive_path('d', 'adir', '', 0),
+        ),
+    )
+
+    assert [option.id for option in directory_list.options] == ['adir', 'big', 'medium', 'small']
+
+
+def make_mounted_directory_list(**kwargs):
+    flexmock(module.borgmatic_browse.workers).should_receive('load_archive_paths')
+
+    return module.Directory_list(
+        config=flexmock(), repository=flexmock(), archive_name='archive', **kwargs
+    )
+
+
+def painted_ids(directory_list):
+    return [
+        directory_list.render_line(y).text.split()[-1] for y in range(len(directory_list.options))
+    ]
+
+
+async def test_on_archive_path_loaded_with_loading_done_resorts_by_size_that_grew_without_new_options():
+    directory_list = make_mounted_directory_list(sort_mode='size')
+
+    class Test_app(textual.app.App):
+        def compose(self):
+            yield directory_list
+
+    async with Test_app().run_test() as pilot:
+        for batch in (
+            (
+                module.borgmatic_browse.archive.Archive_path('-', 'd1/x', '', 100),
+                module.borgmatic_browse.archive.Archive_path('-', 'd2/x', '', 10),
+            ),
+            # No new options arrive in this batch, but d2 now outweighs d1.
+            (module.borgmatic_browse.archive.Archive_path('-', 'd2/y', '', 1000),),
+        ):
+            directory_list.path_loaded.publish(batch)
+            directory_list.on_archive_path_loaded(batch)
+
+        directory_list.on_archive_path_loaded(module.borgmatic_browse.workers.LOADING_DONE)
+        await pilot.pause()
+
+        assert [option.id for option in directory_list.options] == ['d2', 'd1']
+        assert painted_ids(directory_list) == ['d2', 'd1']
+
+
+def test_on_archive_path_loaded_with_loading_done_applies_sort_after_removing_loading_indicator():
+    flexmock(module.borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    flexmock(module.borgmatic_browse.directory_list.Directory_list).should_receive(
+        'app'
+    ).and_return(flexmock())
+    directory_list = module.Directory_list(
+        config=flexmock(),
+        repository=flexmock(),
+        archive_name='archive',
+        path_loaded=flexmock(complete=False, path_hierarchy={'etc': Directory()}),
+        path_components=('etc',),
+    )
+    directory_list.timer = flexmock(stop=lambda: None)
+    flexmock(directory_list).should_receive('remove_option').with_args(
+        'loading-indicator'
+    ).once().ordered()
+    flexmock(directory_list).should_receive('apply_sort').once().ordered()
+
+    directory_list.on_archive_path_loaded(data=module.borgmatic_browse.workers.LOADING_DONE)
