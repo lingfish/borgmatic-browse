@@ -1,5 +1,10 @@
+import re
+import time as time_module
+
+import pytest
 import rich.console
 import rich.text
+import textual.app
 import textual.widgets
 import textual.widgets.option_list
 from flexmock import flexmock
@@ -87,8 +92,8 @@ def test_add_archive_paths_adds_ands_sorts_and_filters_and_deduplicates():
         archive_name='archive',
         archive_paths=(
             flexmock(path_type='d', file_path='etc/quux', link_target='', size=0),
-            flexmock(path_type='-', file_path='etc/foo', link_target='', size=0),
-            flexmock(path_type='-', file_path='etc/baz', link_target='', size=0),
+            flexmock(path_type='-', file_path='etc/foo', link_target='', size=0, mtime=None),
+            flexmock(path_type='-', file_path='etc/baz', link_target='', size=0, mtime=None),
             flexmock(path_type='d', file_path='root/nope', link_target='', size=0),
             flexmock(path_type='d', file_path='etc/other', link_target='', size=0),
         ),
@@ -244,7 +249,9 @@ def test_add_archive_paths_highlights_first_option_if_highlight_has_not_changed(
         config=config,
         repository=config['repositories'][0],
         archive_name='archive',
-        archive_paths=(flexmock(path_type='-', file_path='etc/baz', link_target='', size=0),),
+        archive_paths=(
+            flexmock(path_type='-', file_path='etc/baz', link_target='', size=0, mtime=None),
+        ),
     )
 
     assert len(directory_list.options) == 3
@@ -273,7 +280,9 @@ def test_add_archive_paths_retains_loading_indicator_at_bottom():
         config=config,
         repository=config['repositories'][0],
         archive_name='archive',
-        archive_paths=(flexmock(path_type='-', file_path='etc/baz', link_target='', size=0),),
+        archive_paths=(
+            flexmock(path_type='-', file_path='etc/baz', link_target='', size=0, mtime=None),
+        ),
     )
 
     assert len(directory_list.options) == 4
@@ -504,3 +513,242 @@ def test_directory_list_border_title_shows_archive_label_instead_of_archive_id()
     assert directory_list.archive_name == 'abc123'
     assert 'archive' in directory_list.border_title
     assert 'abc123' not in directory_list.border_title
+
+
+DATE_PATTERN = re.compile(r'\d{4}-\d{2}-\d{2}')
+
+
+@pytest.fixture
+def auckland_time(monkeypatch):
+    # Auckland is UTC+13 on the dates below, so a missing time zone conversion shows up no matter
+    # which time zone the tests happen to run in.
+    monkeypatch.setenv('TZ', 'Pacific/Auckland')
+    time_module.tzset()
+    yield
+    monkeypatch.undo()
+    time_module.tzset()
+
+
+def make_loaded_directory_list():
+    '''
+    Make a root-level option list backed by a real Archive_path_loaded signal, along with that
+    signal.
+    '''
+    path_loaded = module.borgmatic_browse.workers.Archive_path_loaded(owner=flexmock(), name='Bob')
+    directory_list = textual.widgets.OptionList()
+    directory_list.path_components = ()
+    directory_list.path_loaded = path_loaded
+
+    return directory_list, path_loaded
+
+
+def load_batch(directory_list, path_loaded, archive_paths):
+    '''
+    Publish a batch of archive paths to the signal's hierarchy and then add it to the directory list,
+    the way Directory_list does when a batch loads.
+    '''
+    path_loaded.publish(archive_paths)
+    config = {'repositories': [{'path': 'test.borg'}]}
+
+    module.add_archive_paths(
+        directory_list=directory_list,
+        config=config,
+        repository=config['repositories'][0],
+        archive_name='archive',
+        archive_paths=archive_paths,
+    )
+
+
+def test_add_archive_paths_shows_file_its_own_time():
+    directory_list, path_loaded = make_loaded_directory_list()
+
+    load_batch(
+        directory_list,
+        path_loaded,
+        (module.borgmatic_browse.archive.Archive_path('-', 'a.txt', '', 3, '2026-10-31T17:40:59'),),
+    )
+
+    assert directory_list.get_option('a.txt').prompt.plain == (
+        module.make_size_path_prompt(3, '📄 a.txt', '2026-10-31T17:40:59').plain
+    )
+    assert '2026-10-31 17:40' in directory_list.get_option('a.txt').prompt.plain
+
+
+def test_add_archive_paths_shows_directory_with_own_entry_that_time():
+    directory_list, path_loaded = make_loaded_directory_list()
+
+    load_batch(
+        directory_list,
+        path_loaded,
+        (
+            module.borgmatic_browse.archive.Archive_path('d', 'etc', '', 0, '2026-10-30T08:00:00'),
+            module.borgmatic_browse.archive.Archive_path(
+                '-', 'etc/a.txt', '', 3, '2026-10-31T17:40:59'
+            ),
+        ),
+    )
+
+    # The directory shows its own time, not its newest child's.
+    assert directory_list.get_option('etc').prompt.plain == (
+        module.make_size_path_prompt(3, '📁 etc', '2026-10-30T08:00:00').plain
+    )
+    assert '2026-10-30 08:00' in directory_list.get_option('etc').prompt.plain
+
+
+def test_add_archive_paths_shows_directory_known_only_as_parent_a_blank_time():
+    directory_list, path_loaded = make_loaded_directory_list()
+
+    load_batch(
+        directory_list,
+        path_loaded,
+        (
+            module.borgmatic_browse.archive.Archive_path(
+                '-', 'etc/a.txt', '', 3, '2026-10-31T17:40:59'
+            ),
+        ),
+    )
+
+    prompt_text = directory_list.get_option('etc').prompt.plain
+    assert DATE_PATTERN.search(prompt_text) is None
+    assert prompt_text == module.make_size_path_prompt(3, '📁 etc').plain
+
+
+def test_add_archive_paths_replaces_prompt_when_directory_entry_arrives_after_its_children():
+    directory_list, path_loaded = make_loaded_directory_list()
+    load_batch(
+        directory_list,
+        path_loaded,
+        (
+            module.borgmatic_browse.archive.Archive_path(
+                '-', 'etc/a.txt', '', 3, '2026-10-31T17:40:59'
+            ),
+        ),
+    )
+    assert DATE_PATTERN.search(directory_list.get_option('etc').prompt.plain) is None
+    flexmock(directory_list).should_call('replace_option_prompt').with_args('etc', object).once()
+    flexmock(directory_list).should_receive('clear_options').never()
+
+    load_batch(
+        directory_list,
+        path_loaded,
+        (module.borgmatic_browse.archive.Archive_path('d', 'etc', '', 0, '2026-10-30T08:00:00'),),
+    )
+
+    option = directory_list.get_option('etc')
+    assert (
+        option.prompt.plain
+        == module.make_size_path_prompt(3, '📁 etc', '2026-10-30T08:00:00').plain
+    )
+    assert '2026-10-30 08:00' in option.prompt_text
+
+
+def test_add_archive_paths_with_nested_path_in_later_batch_keeps_directory_time():
+    directory_list, path_loaded = make_loaded_directory_list()
+    load_batch(
+        directory_list,
+        path_loaded,
+        (module.borgmatic_browse.archive.Archive_path('d', 'etc', '', 0, '2026-10-30T08:00:00'),),
+    )
+    assert '2026-10-30 08:00' in directory_list.get_option('etc').prompt.plain
+
+    load_batch(
+        directory_list,
+        path_loaded,
+        (
+            module.borgmatic_browse.archive.Archive_path(
+                '-', 'etc/sub/b.txt', '', 1024, '2026-10-31T17:40:59'
+            ),
+        ),
+    )
+
+    # The size grew, so the prompt was replaced, but the time must survive that.
+    assert directory_list.get_option('etc').prompt.plain == (
+        module.make_size_path_prompt(1024, '📁 etc', '2026-10-30T08:00:00').plain
+    )
+
+
+def test_add_archive_paths_does_not_repaint_unchanged_directory_time():
+    directory_list, path_loaded = make_loaded_directory_list()
+    archive_paths = (
+        module.borgmatic_browse.archive.Archive_path('d', 'etc', '', 0, '2026-10-30T08:00:00'),
+    )
+    load_batch(directory_list, path_loaded, archive_paths)
+    flexmock(directory_list).should_receive('replace_option_prompt').never()
+
+    module.add_archive_paths(
+        directory_list=directory_list,
+        config={},
+        repository={},
+        archive_name='archive',
+        archive_paths=archive_paths,
+    )
+
+
+def test_add_archive_paths_repaints_file_whose_time_changed():
+    directory_list, path_loaded = make_loaded_directory_list()
+    load_batch(
+        directory_list,
+        path_loaded,
+        (module.borgmatic_browse.archive.Archive_path('-', 'a.txt', '', 3, '2026-10-31T17:40:59'),),
+    )
+    flexmock(directory_list).should_call('replace_option_prompt').with_args('a.txt', object).once()
+
+    load_batch(
+        directory_list,
+        path_loaded,
+        (module.borgmatic_browse.archive.Archive_path('-', 'a.txt', '', 3, '2026-11-01T09:52:52'),),
+    )
+
+    assert '2026-11-01 09:52' in directory_list.get_option('a.txt').prompt.plain
+
+
+def test_directory_list_parent_option_leaves_time_column_blank():
+    flexmock(module.borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    flexmock(module.borgmatic_browse.directory_list.Directory_list).should_receive(
+        'app'
+    ).and_return(flexmock())
+
+    directory_list = module.Directory_list(
+        config=flexmock(),
+        repository=flexmock(),
+        archive_name='archive',
+        path_loaded=flexmock(complete=True, path_hierarchy={}),
+        path_components=('etc',),
+    )
+
+    assert (
+        directory_list.get_option('..').prompt.plain
+        == module.make_size_path_prompt(None, '📁 ..').plain
+    )
+    assert directory_list.get_option('..').prompt.plain.index('📁') == (
+        module.OPTION_SIZE_COLUMN_WIDTH + 2 + module.OPTION_TIME_COLUMN_WIDTH + 2
+    )
+
+
+async def test_directory_list_paints_file_size_then_time_then_name(auckland_time):
+    flexmock(module.borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    flexmock(module.borgmatic_browse.workers).should_receive('load_archive_paths')
+    directory_list = module.Directory_list(
+        config=flexmock(), repository=flexmock(), archive_name='archive'
+    )
+
+    class Test_app(textual.app.App):
+        def compose(self):
+            yield directory_list
+
+    app = Test_app()
+
+    async with app.run_test() as pilot:
+        archive_paths = (
+            module.borgmatic_browse.archive.Archive_path(
+                '-', 'a.txt', '', 1024, '2026-10-31T12:40:59Z'
+            ),
+        )
+        directory_list.path_loaded.publish(archive_paths)
+        directory_list.on_archive_path_loaded(archive_paths)
+        await pilot.pause()
+
+        line = directory_list.render_line(0).text
+
+        assert app._exception is None
+        assert line.strip() == '1.02 kB  2026-11-01 01:40  📄 a.txt'

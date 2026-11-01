@@ -8,9 +8,11 @@ import borgmatic_browse.bindings
 import borgmatic_browse.icons
 import borgmatic_browse.loading
 import borgmatic_browse.sizes
+import borgmatic_browse.times
 import borgmatic_browse.workers
 
 OPTION_SIZE_COLUMN_WIDTH = 10
+OPTION_TIME_COLUMN_WIDTH = 16
 
 
 def get_relative_archive_path_components(archive_path, current_directory_path_components):
@@ -40,18 +42,20 @@ def get_relative_archive_path_components(archive_path, current_directory_path_co
     return archive_path_components[len(current_directory_path_components) :]
 
 
-def make_size_path_prompt(size, path_text):
+def make_size_path_prompt(size, path_text, mtime=None):
     '''
-    Given a size in bytes (or None for a path that has no size), and plain text for a path, return a
-    Rich renderable of the size right-justified in a fixed-width column with the path beside it, so
-    that the paths in a list of options all line up, the way they do in ncdu or ls -l.
+    Given a size in bytes (or None for a path that has no size), plain text for a path, and an
+    optional modification time as an ISO 8601 string, return a Rich renderable of the size
+    right-justified in a fixed-width column, the time in a second fixed-width column, and the path
+    beside them, so that the paths in a list of options all line up, the way they do in ncdu or
+    ls -l.
 
     A rich.text.Text rather than a rich.table.Table, even though a table is the more natural fit for
     columns. Textual measures the height of every option whenever it rebuilds its line cache, and
     replacing any option's prompt does exactly that. Measuring a table lays out its columns from
     scratch, which made rebuilding the line cache for 2,000 options about 45x slower than measuring
-    text—dwarfing the cost of actually painting the options. Should more columns arrive, that cost
-    may be worth paying, but it isn't for one.
+    text—dwarfing the cost of actually painting the options. Should many more columns arrive, that
+    cost may be worth paying, but it isn't for two.
 
     Pad a bytes size with a trailing space, so that its one-character unit lines up with the
     two-character units of larger sizes, e.g. "358 B " above "1.48 kB". The padding lives here
@@ -63,15 +67,22 @@ def make_size_path_prompt(size, path_text):
     if size_text.endswith(f' {borgmatic_browse.sizes.SIZE_UNITS[0]}'):
         size_text += ' '
 
-    return rich.text.Text(f'{size_text:>{OPTION_SIZE_COLUMN_WIDTH}}  {path_text}')
+    time_text = borgmatic_browse.times.format_time(mtime) if mtime else ''
+
+    return rich.text.Text.assemble(
+        f'{size_text:>{OPTION_SIZE_COLUMN_WIDTH}}  ',
+        (f'{time_text:<{OPTION_TIME_COLUMN_WIDTH}}', 'dim'),
+        f'  {path_text}',
+    )
 
 
-def make_directory_list_option(archive_path, relative_path_components, size):
+def make_directory_list_option(archive_path, relative_path_components, size, mtime=None):
     '''
-    Given an Archive_path instance, a tuple of relative path components for it, and a size in bytes
-    for the path, make a textual.widgets.option_list.Option for the path. Use an the icon based on
-    whether this looks like a terminal filename or a directory, and show a human-readable size in a
-    column beside it.
+    Given an Archive_path instance, a tuple of relative path components for it, a size in bytes for
+    the path, and an optional modification time for the path, make a
+    textual.widgets.option_list.Option for the path. Use an the icon based on whether this looks like
+    a terminal filename or a directory, and show a human-readable size and the time in columns beside
+    it.
 
     Only show a link target for an archive path that is actually this option. For a nested path, the
     option is the directory containing the path, so it has no link target of its own.
@@ -91,10 +102,16 @@ def make_directory_list_option(archive_path, relative_path_components, size):
     ) + (('→', archive_path.link_target) if is_leaf and archive_path.link_target else ())
 
     option = textual.widgets.option_list.Option(
-        prompt=make_size_path_prompt(size, ' '.join(pieces)),
+        prompt=make_size_path_prompt(size, ' '.join(pieces), mtime),
         id=relative_path_components[0],
     )
-    option.prompt_text = ' '.join((*pieces, f'({borgmatic_browse.sizes.format_size(size)})'))
+    option.prompt_text = ' '.join(
+        (
+            *pieces,
+            f'({borgmatic_browse.sizes.format_size(size)})',
+            *((borgmatic_browse.times.format_time(mtime),) if mtime else ()),
+        )
+    )
     option.path_type = path_type
 
     return option
@@ -150,17 +167,21 @@ def add_archive_paths(
 
     for option_id, (archive_path, relative_path_components) in representatives.items():
         # A directory's cumulative size lives in the hierarchy rather than in the archive listing,
-        # which reports directories themselves as zero-sized.
-        size = (
-            borgmatic_browse.workers.get_path_size(
-                directory_list.path_loaded.path_hierarchy,
-                (*directory_list.path_components, option_id),
-            )
-            if len(relative_path_components) > 1
+        # which reports directories themselves as zero-sized. So does its modification time, since
+        # the path we have here might be a nested path rather than the directory's own entry.
+        if (
+            len(relative_path_components) > 1
             or archive_path.path_type == borgmatic_browse.archive.Path_type.DIRECTORY.value
-            else archive_path.size
-        )
-        option = make_directory_list_option(archive_path, relative_path_components, size)
+        ):
+            option_path_components = (*directory_list.path_components, option_id)
+            hierarchy = directory_list.path_loaded.path_hierarchy
+            size = borgmatic_browse.workers.get_path_size(hierarchy, option_path_components)
+            mtime = borgmatic_browse.workers.get_path_mtime(hierarchy, option_path_components)
+        else:
+            size = archive_path.size
+            mtime = archive_path.mtime
+
+        option = make_directory_list_option(archive_path, relative_path_components, size, mtime)
         existing_option = existing_options.get(option_id)
 
         if existing_option is None:

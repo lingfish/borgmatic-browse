@@ -31,8 +31,8 @@ Archive = collections.namedtuple('Archive', ('selector', 'name', 'time'))
 # A data structure capturing a path stored in a Borg archive.
 Archive_path = collections.namedtuple(
     'Archive_path',
-    ('path_type', 'file_path', 'link_target', 'size'),
-    defaults=(0,),
+    ('path_type', 'file_path', 'link_target', 'size', 'mtime'),
+    defaults=(0, None),
 )
 
 
@@ -110,6 +110,7 @@ def get_archive_paths(config, repository, archive_name):
                 path_data['path'],
                 path_data.get('linktarget'),
                 path_data.get('size', 0),
+                path_data.get('mtime'),
             )
             for path_data in borgmatic.borg.list.capture_archive_listing(
                 repository['path'],
@@ -117,9 +118,9 @@ def get_archive_paths(config, repository, archive_name):
                 config,
                 local_borg_version,
                 global_arguments,
-                # Explicitly include the size key even if a custom file_list_format is
-                # configured, since sizes are always shown in the browse UI.
-                path_format='{size}',
+                # Explicitly include the size and modification time keys even if a custom
+                # file_list_format is configured, since they're always shown in the browse UI.
+                path_format='{size}{mtime}',
                 local_path=local_path,
                 remote_path=remote_path,
             )

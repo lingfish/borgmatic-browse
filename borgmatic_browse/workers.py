@@ -42,16 +42,19 @@ def report_loading_error(browse_app, description, error):
 class Directory(dict):
     '''
     A dict subclass for a directory in an archive path hierarchy, with a "size" attribute holding
-    the cumulative size of the files beneath it.
+    the cumulative size of the files beneath it, and an "mtime" attribute holding its own
+    modification time. That's None for a directory that's only known as the parent of other paths,
+    because it doesn't have an entry of its own in the archive.
     '''
 
-    def __init__(self, *args, size=0, **kwargs):
+    def __init__(self, *args, size=0, mtime=None, **kwargs):
         '''
-        Given the usual dict constructor arguments and an optional cumulative size in bytes, make a
-        directory with that size.
+        Given the usual dict constructor arguments, an optional cumulative size in bytes, and an
+        optional modification time as an ISO 8601 string, make a directory with that size and time.
         '''
         super().__init__(*args, **kwargs)
         self.size = size
+        self.mtime = mtime
 
 
 class Archive_loaded(textual.signal.Signal):
@@ -124,7 +127,7 @@ def record_path(archive_path, hierarchy, path_components):
     leaf = path_components[-1]
 
     if archive_path.path_type == borgmatic_browse.archive.Path_type.DIRECTORY.value:
-        directory.setdefault(leaf, Directory())
+        directory.setdefault(leaf, Directory()).mtime = archive_path.mtime
     else:
         directory[leaf] = archive_path
 
@@ -162,6 +165,7 @@ def get_paths(hierarchy, path_components, full_path_components=None):
                     os.path.join(*full_path_components, component),
                     '',
                     archive_path.size,
+                    archive_path.mtime,
                 )
                 for component, archive_path in dict(hierarchy[path_components[0]]).items()
             )
@@ -193,6 +197,26 @@ def get_path_size(hierarchy, path_components):
         node = node[component]
 
     return node.size
+
+
+def get_path_mtime(hierarchy, path_components):
+    '''
+    Given a dict capturing a filesystem hierarchy of paths (or a subset thereof) and a tuple of path
+    components for a directory or file within it, return that path's own modification time. Return
+    None if the given path can't be found or doesn't have a modification time.
+    '''
+    if not path_components:
+        return None
+
+    node = hierarchy
+
+    for component in path_components:
+        if not isinstance(node, dict) or component not in node:
+            return None
+
+        node = node[component]
+
+    return node.mtime
 
 
 class Archive_path_loaded(textual.signal.Signal):

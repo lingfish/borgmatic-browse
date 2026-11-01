@@ -47,6 +47,23 @@ def test_directory_sizes_are_independent_per_instance():
     assert other_directory.size == 0
 
 
+def test_directory_defaults_to_no_mtime():
+    assert module.Directory().mtime is None
+
+
+def test_directory_with_mtime_sets_it():
+    assert module.Directory(size=3, mtime='2026-10-31T17:50:09').mtime == '2026-10-31T17:50:09'
+
+
+def test_directory_mtimes_are_independent_per_instance():
+    directory = module.Directory()
+    other_directory = module.Directory()
+
+    directory.mtime = '2026-10-31T17:50:09'
+
+    assert other_directory.mtime is None
+
+
 def test_record_path_sets_file_path_in_filesystem_hierarchy():
     archive_path = flexmock(path_type='-', file_path='foo/bar/baz.txt', size=3)
     quux_path = flexmock(size=5)
@@ -68,7 +85,7 @@ def test_record_path_sets_file_path_in_filesystem_hierarchy():
 
 
 def test_record_path_sets_directory_path_in_filesystem_hierarchy():
-    archive_path = flexmock(path_type='d', file_path='foo/bar/baz', size=0)
+    archive_path = flexmock(path_type='d', file_path='foo/bar/baz', size=0, mtime=None)
     quux_path = flexmock(size=5)
     hierarchy = {
         'foo': module.Directory(
@@ -82,6 +99,71 @@ def test_record_path_sets_directory_path_in_filesystem_hierarchy():
 
     assert hierarchy == {'foo': {'bar': {'quux.txt': quux_path, 'baz': {}}, 'empty': {}}}
     assert hierarchy['foo']['bar']['baz'].size == 0
+
+
+def test_record_path_sets_mtime_on_new_directory_but_not_its_parents():
+    archive_path = module.borgmatic_browse.archive.Archive_path(
+        'd', 'foo/bar', '', 0, '2026-10-31T17:50:09'
+    )
+    hierarchy = {}
+
+    module.record_path(archive_path, hierarchy, ('foo', 'bar'))
+
+    assert hierarchy['foo']['bar'].mtime == '2026-10-31T17:50:09'
+    assert hierarchy['foo'].mtime is None
+
+
+def test_record_path_sets_mtime_on_existing_directory_keeping_children_and_size():
+    baz_path = module.borgmatic_browse.archive.Archive_path('-', 'foo/bar/baz.txt', '', 3)
+    hierarchy = {}
+    module.record_path(baz_path, hierarchy, ('foo', 'bar', 'baz.txt'))
+    assert hierarchy['foo']['bar'].mtime is None
+
+    module.record_path(
+        module.borgmatic_browse.archive.Archive_path('d', 'foo/bar', '', 0, '2026-10-31T17:50:09'),
+        hierarchy,
+        ('foo', 'bar'),
+    )
+
+    assert hierarchy['foo']['bar'] == {'baz.txt': baz_path}
+    assert hierarchy['foo']['bar'].size == 3
+    assert hierarchy['foo']['bar'].mtime == '2026-10-31T17:50:09'
+    assert hierarchy['foo'].size == 3
+    assert hierarchy['foo'].mtime is None
+
+
+def test_record_path_with_directory_without_mtime_leaves_mtime_none():
+    hierarchy = {}
+
+    module.record_path(
+        module.borgmatic_browse.archive.Archive_path('d', 'foo', '', 0), hierarchy, ('foo',)
+    )
+
+    assert hierarchy['foo'].mtime is None
+
+
+def test_record_path_with_child_does_not_alter_parent_mtime():
+    hierarchy = {}
+    module.record_path(
+        module.borgmatic_browse.archive.Archive_path('d', 'foo', '', 0, '2026-10-31T17:50:09'),
+        hierarchy,
+        ('foo',),
+    )
+
+    module.record_path(
+        module.borgmatic_browse.archive.Archive_path(
+            '-', 'foo/baz.txt', '', 3, '2026-11-01T09:52:52'
+        ),
+        hierarchy,
+        ('foo', 'baz.txt'),
+    )
+    module.record_path(
+        module.borgmatic_browse.archive.Archive_path('d', 'foo/sub', '', 0, '2026-11-02T09:52:52'),
+        hierarchy,
+        ('foo', 'sub'),
+    )
+
+    assert hierarchy['foo'].mtime == '2026-10-31T17:50:09'
 
 
 def test_get_paths_lists_directory_contents():
@@ -127,6 +209,33 @@ def test_get_paths_lists_empty_directory_contents():
         tuple(module.get_paths(hierarchy, ('foo', 'bar', 'other'), ('etc', 'foo', 'bar', 'other')))
         == ()
     )
+
+
+def test_get_paths_directory_archive_paths_carry_mtime():
+    hierarchy = {
+        'foo': module.Directory(
+            {
+                'dated': module.Directory(size=4, mtime='2026-10-31T17:50:09'),
+                'undated': module.Directory(),
+            }
+        )
+    }
+
+    assert tuple(module.get_paths(hierarchy, ('foo',))) == (
+        module.borgmatic_browse.archive.Archive_path(
+            'd', 'foo/dated', '', 4, '2026-10-31T17:50:09'
+        ),
+        module.borgmatic_browse.archive.Archive_path('d', 'foo/undated', '', 0, None),
+    )
+
+
+def test_get_paths_leaves_file_archive_paths_untouched():
+    baz_path = module.borgmatic_browse.archive.Archive_path(
+        '-', 'foo/baz.txt', '', 3, '2026-10-31T17:50:09'
+    )
+    hierarchy = {'foo': module.Directory({'baz.txt': baz_path})}
+
+    assert tuple(module.get_paths(hierarchy, ('foo',))) == (baz_path,)
 
 
 def test_get_paths_with_unknown_file_raises():
@@ -190,6 +299,55 @@ def test_get_path_size_with_file_in_path_returns_zero():
     archive_path = module.borgmatic_browse.archive.Archive_path('-', 'foo.txt', '', 7)
 
     assert module.get_path_size({'foo.txt': archive_path}, ('foo.txt', 'bar')) == 0
+
+
+def test_get_path_mtime_returns_directory_mtime():
+    hierarchy = {
+        'foo': module.Directory(
+            {'bar': module.Directory(mtime='2026-10-31T17:50:09')}, mtime='2026-10-30T08:00:00'
+        )
+    }
+
+    assert module.get_path_mtime(hierarchy, ('foo',)) == '2026-10-30T08:00:00'
+    assert module.get_path_mtime(hierarchy, ('foo', 'bar')) == '2026-10-31T17:50:09'
+
+
+def test_get_path_mtime_returns_file_mtime():
+    archive_path = module.borgmatic_browse.archive.Archive_path(
+        '-', 'foo.txt', '', 7, '2026-11-01T09:52:52.447550+11:00'
+    )
+
+    assert (
+        module.get_path_mtime({'foo.txt': archive_path}, ('foo.txt',))
+        == '2026-11-01T09:52:52.447550+11:00'
+    )
+
+
+def test_get_path_mtime_with_unknown_path_returns_none():
+    hierarchy = {'foo': module.Directory()}
+
+    assert module.get_path_mtime(hierarchy, ('foo', 'bar')) is None
+    assert module.get_path_mtime(hierarchy, ('nope',)) is None
+
+
+def test_get_path_mtime_with_file_in_path_returns_none():
+    archive_path = module.borgmatic_browse.archive.Archive_path(
+        '-', 'foo.txt', '', 7, '2026-10-31T17:50:09'
+    )
+
+    assert module.get_path_mtime({'foo.txt': archive_path}, ('foo.txt', 'bar')) is None
+
+
+def test_get_path_mtime_with_no_path_components_returns_none():
+    assert module.get_path_mtime({'foo': module.Directory(mtime='2026-10-31T17:50:09')}, ()) is None
+
+
+def test_get_path_mtime_with_no_mtime_returns_none():
+    archive_path = module.borgmatic_browse.archive.Archive_path('-', 'foo.txt', '', 7)
+    hierarchy = {'foo.txt': archive_path, 'etc': module.Directory()}
+
+    assert module.get_path_mtime(hierarchy, ('foo.txt',)) is None
+    assert module.get_path_mtime(hierarchy, ('etc',)) is None
 
 
 def test_load_archive_paths_publishes_a_batch_of_archive_paths():

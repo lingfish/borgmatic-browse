@@ -81,6 +81,60 @@ def test_get_archive_paths_defaults_missing_size_to_zero():
     )
 
 
+def test_archive_path_defaults_mtime_to_none():
+    assert module.Archive_path('-', 'foo.txt', '', 3).mtime is None
+    assert module.Archive_path('-', 'foo.txt', '').mtime is None
+    assert module.Archive_path('-', 'foo.txt', '').size == 0
+
+
+def test_archive_path_with_mtime_keeps_raw_string():
+    archive_path = module.Archive_path('-', 'foo.txt', '', 3, '2026-11-01T09:52:52.447550+11:00')
+
+    assert archive_path.size == 3
+    assert archive_path.mtime == '2026-11-01T09:52:52.447550+11:00'
+
+
+def test_get_archive_paths_returns_raw_mtime_for_each_path():
+    config = {'repositories': [{'path': 'test.borg'}]}
+    flexmock(module.borgmatic.logger).should_receive('Log_prefix').and_return(flexmock())
+    flexmock(module.borgmatic.borg.version).should_receive('local_borg_version').and_return('3.0')
+    flexmock(module.borgmatic.borg.list).should_receive('capture_archive_listing').and_yield(
+        {
+            'path': 's/a.txt',
+            'type': '-',
+            'size': 3,
+            'mtime': '2026-11-01T09:52:52.447550+11:00',
+        },
+        {'path': 'tree', 'type': 'd', 'size': 0, 'mtime': '2026-10-31T17:50:09.044035'},
+        {'path': 'nomtime', 'type': '-', 'size': 1},
+    )
+
+    assert tuple(module.get_archive_paths(config, config['repositories'][0], 'archive')) == (
+        module.Archive_path('-', 's/a.txt', None, 3, '2026-11-01T09:52:52.447550+11:00'),
+        module.Archive_path('d', 'tree', None, 0, '2026-10-31T17:50:09.044035'),
+        module.Archive_path('-', 'nomtime', None, 1, None),
+    )
+
+
+def test_get_archive_paths_asks_borg_for_size_and_mtime():
+    config = {'repositories': [{'path': 'test.borg'}]}
+    flexmock(module.borgmatic.logger).should_receive('Log_prefix').and_return(flexmock())
+    flexmock(module.borgmatic.borg.version).should_receive('local_borg_version').and_return('3.0')
+    captured = {}
+
+    def fake_capture_archive_listing(*args, **kwargs):
+        captured.update(kwargs)
+        return iter(())
+
+    flexmock(module.borgmatic.borg.list).should_receive('capture_archive_listing').replace_with(
+        fake_capture_archive_listing
+    )
+
+    tuple(module.get_archive_paths(config, config['repositories'][0], 'archive'))
+
+    assert captured['path_format'] == '{size}{mtime}'
+
+
 def test_get_archive_file_content_with_binary_file_bails():
     config = {'repositories': [{'path': 'test.borg'}]}
     flexmock(module.borgmatic.logger).should_receive('Log_prefix').and_return(flexmock())
