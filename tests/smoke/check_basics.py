@@ -150,6 +150,12 @@ def main():
         'does not exist',
     )
     check(
+        'A missing passphrase shows an error instead of prompting',
+        'no-passphrase',
+        [('nopass', '\r'), ('none is configured', 'q')],
+        'none is configured',
+    )
+    check(
         'A wrong passphrase shows an error',
         'wrong-passphrase',
         [('wrongpass', '\r'), ('Error listing', 'q')],

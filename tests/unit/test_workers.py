@@ -443,7 +443,7 @@ def test_add_repository_archives_with_failure_notifies_logs_and_publishes_loadin
     module.add_repository_archives.__wrapped__(
         browse_app=make_browse_app(failure_detail(error)),
         archive_loaded=archive_loaded,
-        config=flexmock(),
+        config={},
         repository=flexmock(),
     )
 
@@ -460,7 +460,7 @@ def test_add_repository_archives_with_empty_output_failure_reports_str_of_error(
     module.add_repository_archives.__wrapped__(
         browse_app=make_browse_app(str(error)),
         archive_loaded=archive_loaded,
-        config=flexmock(),
+        config={},
         repository=flexmock(),
     )
 
@@ -477,7 +477,7 @@ def test_add_repository_archives_with_failure_escapes_markup_in_notification():
     module.add_repository_archives.__wrapped__(
         browse_app=make_browse_app('bad [/nope] path'),
         archive_loaded=archive_loaded,
-        config=flexmock(),
+        config={},
         repository=flexmock(),
     )
 
@@ -499,7 +499,7 @@ def test_load_archive_paths_with_failure_publishes_partial_batch_then_loading_do
     module.load_archive_paths.__wrapped__(
         browse_app=make_browse_app(failure_detail(error)),
         path_loaded=path_loaded,
-        config=flexmock(),
+        config={},
         repository=flexmock(),
         archive_name='archive',
     )
@@ -517,11 +517,163 @@ def test_load_file_preview_with_failure_notifies_logs_and_publishes_loading_fail
     module.load_file_preview.__wrapped__(
         browse_app=make_browse_app(failure_detail(error)),
         file_preview_loaded=file_preview_loaded,
-        config=flexmock(),
+        config={},
         repository=flexmock(),
         archive_name='archive',
         file_path='foo/bar/baz.txt',
     )
+
+
+BORG_PASSPHRASE_ERROR = (
+    'Passphrase supplied in BORG_PASSPHRASE, by BORG_PASSCOMMAND or via BORG_PASSPHRASE_FD is '
+    'incorrect.'
+)
+
+
+def make_capturing_browse_app(notifications):
+    '''
+    Given a list, return a fake Browse_app that appends each (message, severity) notification to it.
+    '''
+    browse_app = flexmock()
+    browse_app.should_receive('notify').replace_with(
+        lambda message, severity=None: notifications.append((message, severity))
+    )
+
+    return browse_app
+
+
+def test_no_passphrase_message_mentions_the_configuration_option():
+    assert 'encryption_passphrase' in module.NO_PASSPHRASE_MESSAGE
+
+
+def test_report_loading_error_with_empty_passphrase_and_borg_passphrase_error_explains_it():
+    notifications = []
+    flexmock(module.logger).should_receive('error').with_args(
+        f'Error listing repository: {module.NO_PASSPHRASE_MESSAGE}'
+    ).once()
+
+    module.report_loading_error(
+        make_capturing_browse_app(notifications),
+        'Error listing repository',
+        subprocess.CalledProcessError(52, 'borg list', output=BORG_PASSPHRASE_ERROR),
+        {'encryption_passphrase': ''},
+    )
+
+    assert notifications == [
+        (
+            rich.markup.escape(f'Error listing repository: {module.NO_PASSPHRASE_MESSAGE}'),
+            'error',
+        )
+    ]
+    assert 'Passphrase supplied in' not in notifications[0][0]
+
+
+def test_report_loading_error_with_empty_passphrase_and_other_error_keeps_borg_message():
+    notifications = []
+    flexmock(module.logger).should_receive('error').with_args(
+        'Error listing repository: Repository /x does not exist.'
+    ).once()
+
+    module.report_loading_error(
+        make_capturing_browse_app(notifications),
+        'Error listing repository',
+        subprocess.CalledProcessError(13, 'borg list', output='Repository /x does not exist.'),
+        {'encryption_passphrase': ''},
+    )
+
+    assert notifications == [('Error listing repository: Repository /x does not exist.', 'error')]
+
+
+@pytest.mark.parametrize('config', ({'encryption_passphrase': 'secret'}, {}))
+def test_report_loading_error_without_empty_passphrase_keeps_borg_passphrase_message(config):
+    notifications = []
+    flexmock(module.logger).should_receive('error').with_args(
+        f'Error listing repository: {BORG_PASSPHRASE_ERROR}'
+    ).once()
+
+    module.report_loading_error(
+        make_capturing_browse_app(notifications),
+        'Error listing repository',
+        subprocess.CalledProcessError(52, 'borg list', output=BORG_PASSPHRASE_ERROR),
+        config,
+    )
+
+    assert notifications == [(f'Error listing repository: {BORG_PASSPHRASE_ERROR}', 'error')]
+
+
+def test_add_repository_archives_with_empty_passphrase_and_borg_passphrase_error_explains_it():
+    notifications = []
+    flexmock(module.borgmatic_browse.archive).should_receive('get_repository_archives').and_raise(
+        subprocess.CalledProcessError(52, 'borg', output=BORG_PASSPHRASE_ERROR)
+    )
+    flexmock(module.logger).should_receive('error').once()
+    archive_loaded = flexmock()
+    archive_loaded.should_receive('publish').with_args(module.LOADING_DONE).once()
+
+    module.add_repository_archives.__wrapped__(
+        browse_app=make_capturing_browse_app(notifications),
+        archive_loaded=archive_loaded,
+        config={'encryption_passphrase': ''},
+        repository=flexmock(),
+    )
+
+    assert notifications == [
+        (
+            rich.markup.escape(f'Error listing repository: {module.NO_PASSPHRASE_MESSAGE}'),
+            'error',
+        )
+    ]
+
+
+def test_load_archive_paths_with_empty_passphrase_and_borg_passphrase_error_explains_it():
+    notifications = []
+    flexmock(module.borgmatic_browse.archive).should_receive('get_archive_paths').and_raise(
+        subprocess.CalledProcessError(52, 'borg', output=BORG_PASSPHRASE_ERROR)
+    )
+    flexmock(module.logger).should_receive('error').once()
+    path_loaded = flexmock()
+    path_loaded.should_receive('publish').with_args(module.LOADING_DONE).once()
+
+    module.load_archive_paths.__wrapped__(
+        browse_app=make_capturing_browse_app(notifications),
+        path_loaded=path_loaded,
+        config={'encryption_passphrase': ''},
+        repository=flexmock(),
+        archive_name='archive',
+    )
+
+    assert notifications == [
+        (
+            rich.markup.escape(f'Error listing archive archive: {module.NO_PASSPHRASE_MESSAGE}'),
+            'error',
+        )
+    ]
+
+
+def test_load_file_preview_with_empty_passphrase_and_borg_passphrase_error_explains_it():
+    notifications = []
+    flexmock(module.borgmatic_browse.archive).should_receive('get_archive_file_content').and_raise(
+        subprocess.CalledProcessError(52, 'borg', output=BORG_PASSPHRASE_ERROR)
+    )
+    flexmock(module.logger).should_receive('error').once()
+    file_preview_loaded = flexmock()
+    file_preview_loaded.should_receive('publish').with_args(module.LOADING_FAILED).once()
+
+    module.load_file_preview.__wrapped__(
+        browse_app=make_capturing_browse_app(notifications),
+        file_preview_loaded=file_preview_loaded,
+        config={'encryption_passphrase': ''},
+        repository=flexmock(),
+        archive_name='archive',
+        file_path='foo/bar/baz.txt',
+    )
+
+    assert notifications == [
+        (
+            rich.markup.escape(f'Error loading foo/bar/baz.txt: {module.NO_PASSPHRASE_MESSAGE}'),
+            'error',
+        )
+    ]
 
 
 def test_loading_failed_is_distinct_from_none_and_loading_done():

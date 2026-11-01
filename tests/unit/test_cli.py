@@ -5,6 +5,29 @@ from flexmock import flexmock
 
 from borgmatic_browse import cli as module
 
+PASSPHRASE_ENVIRONMENT_VARIABLES = ('BORG_PASSPHRASE', 'BORG_PASSCOMMAND', 'BORG_PASSPHRASE_FD')
+
+
+@pytest.fixture(autouse=True)
+def passphrase_in_environment(monkeypatch):
+    '''
+    Set a Borg passphrase in the environment so that main() leaves configurations alone, keeping
+    tests that compare whole configurations independent of the passphrase default. Tests of that
+    default clear the environment variables themselves.
+    '''
+    for name in PASSPHRASE_ENVIRONMENT_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+
+    monkeypatch.setenv('BORG_PASSPHRASE', 'from-environment')
+
+
+def clear_passphrase_environment(monkeypatch):
+    '''
+    Given a monkeypatch fixture, remove all the Borg passphrase environment variables.
+    '''
+    for name in PASSPHRASE_ENVIRONMENT_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+
 
 def insert_load_mocks(configs=None, parse_logs=(), expected_config_paths=None, overrides=None):
     flexmock(module.borgmatic.config.collect).should_receive('collect_config_filenames').with_args(
@@ -197,6 +220,139 @@ def test_main_without_match_archives_flag_leaves_configurations_untouched():
     ).once()
 
     module.main()
+
+
+def test_prevent_passphrase_prompts_sets_empty_passphrase_without_any_passphrase_source(
+    monkeypatch,
+):
+    clear_passphrase_environment(monkeypatch)
+    configs = {'test.yaml': {'repositories': [{'path': 'test.borg'}]}}
+
+    module.prevent_passphrase_prompts(configs)
+
+    assert configs == {
+        'test.yaml': {'repositories': [{'path': 'test.borg'}], 'encryption_passphrase': ''}
+    }
+
+
+def test_prevent_passphrase_prompts_keeps_configured_passphrase(monkeypatch):
+    clear_passphrase_environment(monkeypatch)
+    configs = {'test.yaml': {'encryption_passphrase': 'secret'}}
+
+    module.prevent_passphrase_prompts(configs)
+
+    assert configs == {'test.yaml': {'encryption_passphrase': 'secret'}}
+
+
+def test_prevent_passphrase_prompts_keeps_configured_empty_passphrase(monkeypatch):
+    clear_passphrase_environment(monkeypatch)
+    configs = {'test.yaml': {'encryption_passphrase': ''}}
+
+    module.prevent_passphrase_prompts(configs)
+
+    assert configs == {'test.yaml': {'encryption_passphrase': ''}}
+
+
+def test_prevent_passphrase_prompts_leaves_configuration_with_passcommand_alone(monkeypatch):
+    clear_passphrase_environment(monkeypatch)
+    configs = {'test.yaml': {'encryption_passcommand': 'pass borg'}}
+
+    module.prevent_passphrase_prompts(configs)
+
+    assert configs == {'test.yaml': {'encryption_passcommand': 'pass borg'}}
+
+
+def test_prevent_passphrase_prompts_handles_each_configuration_separately(monkeypatch):
+    clear_passphrase_environment(monkeypatch)
+    configs = {
+        'one.yaml': {},
+        'two.yaml': {'encryption_passphrase': 'secret'},
+        'three.yaml': {'encryption_passcommand': 'pass borg'},
+        'four.yaml': {'encryption_passphrase': ''},
+    }
+
+    module.prevent_passphrase_prompts(configs)
+
+    assert configs == {
+        'one.yaml': {'encryption_passphrase': ''},
+        'two.yaml': {'encryption_passphrase': 'secret'},
+        'three.yaml': {'encryption_passcommand': 'pass borg'},
+        'four.yaml': {'encryption_passphrase': ''},
+    }
+
+
+def test_prevent_passphrase_prompts_with_no_configurations_does_nothing(monkeypatch):
+    clear_passphrase_environment(monkeypatch)
+    configs = {}
+
+    module.prevent_passphrase_prompts(configs)
+
+    assert configs == {}
+
+
+@pytest.mark.parametrize('name', PASSPHRASE_ENVIRONMENT_VARIABLES)
+@pytest.mark.parametrize('value', ('something', ''))
+def test_prevent_passphrase_prompts_with_passphrase_in_environment_leaves_configurations_alone(
+    monkeypatch, name, value
+):
+    clear_passphrase_environment(monkeypatch)
+    monkeypatch.setenv(name, value)
+    configs = {'test.yaml': {}, 'other.yaml': {'encryption_passphrase': 'secret'}}
+
+    module.prevent_passphrase_prompts(configs)
+
+    assert configs == {'test.yaml': {}, 'other.yaml': {'encryption_passphrase': 'secret'}}
+
+
+def test_main_prevents_passphrase_prompts_before_running_browse(monkeypatch):
+    clear_passphrase_environment(monkeypatch)
+    flexmock(module.sys, argv=['borgmatic-browse', '-c', 'test.yaml'])
+    insert_load_mocks(
+        {'test.yaml': {}, 'other.yaml': {'encryption_passphrase': 'secret'}},
+        expected_config_paths=['test.yaml'],
+    )
+    flexmock(module.borgmatic.logger).should_receive('configure_logging')
+    flexmock(module.borgmatic_browse.run).should_receive('run_browse').with_args(
+        diff_arguments=None,
+        global_arguments=None,
+        configs={
+            'test.yaml': {'encryption_passphrase': ''},
+            'other.yaml': {'encryption_passphrase': 'secret'},
+        },
+    ).once()
+
+    module.main()
+
+
+def test_main_with_configuration_error_exits_without_preventing_passphrase_prompts(monkeypatch):
+    clear_passphrase_environment(monkeypatch)
+    error = logging.makeLogRecord(dict(levelno=logging.CRITICAL, levelname='CRITICAL', msg='oh no'))
+    configs = {'test.yaml': {}}
+    flexmock(module.sys, argv=['borgmatic-browse', '-c', 'test.yaml'])
+    insert_load_mocks(configs, parse_logs=[error], expected_config_paths=['test.yaml'])
+    flexmock(module.borgmatic.logger).should_receive('configure_logging')
+    flexmock(module.logger).should_receive('handle')
+    flexmock(module.borgmatic_browse.run).should_receive('run_browse').never()
+
+    with pytest.raises(SystemExit):
+        module.main()
+
+    assert configs == {'test.yaml': {}}
+
+
+def test_main_without_any_configuration_files_exits_without_preventing_passphrase_prompts(
+    monkeypatch,
+):
+    clear_passphrase_environment(monkeypatch)
+    flexmock(module.sys, argv=['borgmatic-browse', '-c', 'test.yaml'])
+    insert_load_mocks({}, expected_config_paths=['test.yaml'])
+    flexmock(module.borgmatic.logger).should_receive('configure_logging')
+    flexmock(module.logger).should_receive('critical')
+    flexmock(module.borgmatic_browse.run).should_receive('run_browse').never()
+    flexmock(module).should_receive('prevent_passphrase_prompts').never()
+
+    with pytest.raises(SystemExit):
+        module.main()
 
 
 def test_main_with_match_archives_flag_and_configuration_error_exits_without_running_browse():

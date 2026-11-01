@@ -102,8 +102,12 @@ borg list --format '{type} {mtime} {path}{NL}' REPOSITORY::ARCHIVE | grep -E ' m
 * Only archives matching `{hostname}-*` are listed by default, because that's borgmatic's default
   archive name format. Use `-a '*'` to list them all, or set `match_archives` or
   `archive_name_format` in your configuration.
-* If a repository needs a passphrase that isn't configured, Borg prompts for it on the terminal
-  underneath the UI, and the app appears to hang on the loading indicator.
+* The app can't prompt for a passphrase. If a repository needs one and none is configured, selecting
+  it shows an error. Set `encryption_passphrase` or `encryption_passcommand` in your configuration,
+  or the `BORG_PASSPHRASE` environment variable.
+* If SSH needs a password or a host key confirmation for a remote repository, it may prompt on the
+  terminal underneath the UI, and the app may get stuck and not respond to `q`. Use key-based
+  authentication with a known host.
 * If the app is killed from outside, such as with a SIGTERM, it doesn't restore the terminal or
   stop a running Borg command. Quitting with `q` handles both.
 

@@ -19,21 +19,37 @@ LOADING_FAILED = object()
 # raises, so anything else remains fatal.
 LOADING_ERRORS = (subprocess.CalledProcessError, OSError, ValueError)
 
+# What Borg's error says when a repository rejects the passphrase it's given, and what to say instead
+# if that passphrase is just the empty one set in place of a prompt.
+BORG_WRONG_PASSPHRASE_TEXT = 'Passphrase supplied in'
+NO_PASSPHRASE_MESSAGE = (
+    'This repository needs a passphrase, but none is configured. Set "encryption_passphrase" or '
+    '"encryption_passcommand" in your configuration, or the BORG_PASSPHRASE environment variable.'
+)
+
 # How many archive paths to publish (and repaint for) at a time.
 BATCH_SIZE = 200
 
 
-def report_loading_error(browse_app, description, error):
+def report_loading_error(browse_app, description, error, config):
     '''
-    Given a running Browse_app instance, a description of what failed, and the exception raised, log
-    the error and show it as a notification, so the user finds out why loading stopped. Prefer a
-    failed command's own output over the exception's text, since the output says what went wrong
-    rather than just which command failed.
+    Given a running Browse_app instance, a description of what failed, the exception raised, and a
+    configuration dict, log the error and show it as a notification, so the user finds out why
+    loading stopped. Prefer a failed command's own output over the exception's text, since the output
+    says what went wrong rather than just which command failed.
+
+    If Borg rejected an empty passphrase, say that no passphrase is configured, as Borg's error
+    implies that the user supplied a wrong one.
 
     Escape the notification because the message contains arbitrary text like Borg output and paths,
     which might look like Rich markup.
     '''
-    message = f"{description}: {getattr(error, 'output', None) or error}"
+    detail = getattr(error, 'output', None) or str(error)
+
+    if config.get('encryption_passphrase') == '' and BORG_WRONG_PASSPHRASE_TEXT in detail:
+        detail = NO_PASSPHRASE_MESSAGE
+
+    message = f'{description}: {detail}'
 
     logger.error(message)
     browse_app.notify(rich.markup.escape(message), severity='error')
@@ -82,7 +98,7 @@ def add_repository_archives(browse_app, archive_loaded, config, repository):
     try:
         archives = borgmatic_browse.archive.get_repository_archives(config, repository)
     except LOADING_ERRORS as error:
-        report_loading_error(browse_app, 'Error listing repository', error)
+        report_loading_error(browse_app, 'Error listing repository', error, config)
         archive_loaded.publish(LOADING_DONE)
         return
 
@@ -283,7 +299,7 @@ def load_archive_paths(browse_app, path_loaded, config, repository, archive_name
                 path_loaded.publish(tuple(batch))
                 batch.clear()
     except LOADING_ERRORS as error:
-        report_loading_error(browse_app, f'Error listing archive {archive_name}', error)
+        report_loading_error(browse_app, f'Error listing archive {archive_name}', error, config)
 
     if batch:
         path_loaded.publish(tuple(batch))
@@ -325,7 +341,7 @@ def load_file_preview(
             config, repository, archive_name, file_path
         )
     except LOADING_ERRORS as error:
-        report_loading_error(browse_app, f'Error loading {file_path}', error)
+        report_loading_error(browse_app, f'Error loading {file_path}', error, config)
         file_preview_loaded.publish(LOADING_FAILED)
         return
 

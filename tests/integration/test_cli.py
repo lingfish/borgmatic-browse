@@ -1,3 +1,6 @@
+import os
+
+import borgmatic.borg.environment
 import borgmatic.borg.flags
 import pytest
 from flexmock import flexmock
@@ -76,3 +79,40 @@ def test_main_match_archives_flag_produces_borg_flags_for_each_borg_version(
         )
         == expected_flags
     )
+
+
+def clear_passphrase_environment(monkeypatch):
+    for name in ('BORG_PASSPHRASE', 'BORG_PASSCOMMAND', 'BORG_PASSPHRASE_FD'):
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_prevent_passphrase_prompts_makes_borgmatic_pass_a_passphrase_file_descriptor(monkeypatch):
+    clear_passphrase_environment(monkeypatch)
+    config = {}
+    module.prevent_passphrase_prompts({'test.yaml': config})
+
+    environment = borgmatic.borg.environment.make_environment(config)
+
+    try:
+        assert 'BORG_PASSPHRASE_FD' in environment
+    finally:
+        if 'BORG_PASSPHRASE_FD' in environment:
+            os.close(int(environment['BORG_PASSPHRASE_FD']))
+
+
+def test_prevent_passphrase_prompts_with_passphrase_in_environment_keeps_it_in_borgmatic_environment(
+    monkeypatch,
+):
+    clear_passphrase_environment(monkeypatch)
+    monkeypatch.setenv('BORG_PASSPHRASE', 'from-environment')
+    config = {}
+    module.prevent_passphrase_prompts({'test.yaml': config})
+
+    environment = borgmatic.borg.environment.make_environment(config)
+
+    try:
+        assert environment['BORG_PASSPHRASE'] == 'from-environment'
+        assert 'BORG_PASSPHRASE_FD' not in environment
+    finally:
+        if 'BORG_PASSPHRASE_FD' in environment:
+            os.close(int(environment['BORG_PASSPHRASE_FD']))

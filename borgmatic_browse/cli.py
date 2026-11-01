@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import sys
 
 import borgmatic.commands.borgmatic
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 EXIT_CODE_ERROR = 1
 MINIMUM_VERBOSITY = -2
 MAXIMUM_VERBOSITY = 2
+PASSPHRASE_ENVIRONMENT_VARIABLES = ('BORG_PASSPHRASE', 'BORG_PASSCOMMAND', 'BORG_PASSPHRASE_FD')
 
 
 def parse_arguments(*unparsed_arguments):
@@ -55,6 +57,27 @@ def parse_arguments(*unparsed_arguments):
     )
 
     return parser.parse_args(unparsed_arguments)
+
+
+def prevent_passphrase_prompts(configs):
+    '''
+    Given a dict from configuration filename to configuration dict, set an empty passphrase on each
+    configuration that has no other source for one, so that Borg doesn't prompt for it. A prompt
+    would appear underneath the UI and take over the terminal, leaving the app stuck.
+
+    Given a passphrase from anywhere, Borg uses it rather than prompting. So a repository that needs
+    a real passphrase instead fails with an error, while a repository with an empty passphrase or no
+    encryption keeps working.
+
+    Leave the configurations alone if a passphrase environment variable is set, as setting a
+    passphrase in a configuration would override it.
+    '''
+    if any(variable in os.environ for variable in PASSPHRASE_ENVIRONMENT_VARIABLES):
+        return
+
+    for config in configs.values():
+        if 'encryption_passphrase' not in config and 'encryption_passcommand' not in config:
+            config['encryption_passphrase'] = ''
 
 
 def main():
@@ -101,5 +124,7 @@ def main():
     if arguments.match_archives:
         for config in configs.values():
             config['match_archives'] = arguments.match_archives
+
+    prevent_passphrase_prompts(configs)
 
     borgmatic_browse.run.run_browse(diff_arguments=None, global_arguments=None, configs=configs)
