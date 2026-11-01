@@ -14,6 +14,7 @@ import borgmatic_browse.workers
 
 OPTION_SIZE_COLUMN_WIDTH = 10
 OPTION_TIME_COLUMN_WIDTH = 16
+NO_DIRECTORY_ENTRY_TEXT = '<no dir entry>'
 
 
 def get_relative_archive_path_components(archive_path, current_directory_path_components):
@@ -43,10 +44,11 @@ def get_relative_archive_path_components(archive_path, current_directory_path_co
     return archive_path_components[len(current_directory_path_components) :]
 
 
-def make_size_path_prompt(size, path_text, mtime=None):
+def make_size_path_prompt(size, path_text, mtime=None, time_placeholder=''):
     '''
-    Given a size in bytes (or None for a path that has no size), plain text for a path, and an
-    optional modification time as an ISO 8601 string, return a Rich renderable of the size
+    Given a size in bytes (or None for a path that has no size), plain text for a path, an optional
+    modification time as an ISO 8601 string, and optional text to show in place of a missing time,
+    return a Rich renderable of the size
     right-justified in a fixed-width column, the time in a second fixed-width column, and the path
     beside them, so that the paths in a list of options all line up, the way they do in ncdu or
     ls -l.
@@ -68,7 +70,7 @@ def make_size_path_prompt(size, path_text, mtime=None):
     if size_text.endswith(f' {borgmatic_browse.sizes.SIZE_UNITS[0]}'):
         size_text += ' '
 
-    time_text = borgmatic_browse.times.format_time(mtime) if mtime else ''
+    time_text = borgmatic_browse.times.format_time(mtime) if mtime else time_placeholder
 
     return rich.text.Text.assemble(
         f'{size_text:>{OPTION_SIZE_COLUMN_WIDTH}}  ',
@@ -84,6 +86,9 @@ def make_directory_list_option(archive_path, relative_path_components, size, mti
     textual.widgets.option_list.Option for the path. Use an the icon based on whether this looks like
     a terminal filename or a directory, and show a human-readable size and the time in columns beside
     it.
+
+    A directory without a modification time has no entry of its own in the archive, because it's
+    only known as the parent of other paths. Say so, as a blank time looks like a bug.
 
     Only show a link target for an archive path that is actually this option. For a nested path, the
     option is the directory containing the path, so it has no link target of its own.
@@ -104,7 +109,16 @@ def make_directory_list_option(archive_path, relative_path_components, size, mti
     ) + (('→', archive_path.link_target) if is_leaf and archive_path.link_target else ())
 
     option = textual.widgets.option_list.Option(
-        prompt=make_size_path_prompt(size, ' '.join(pieces), mtime),
+        prompt=make_size_path_prompt(
+            size,
+            ' '.join(pieces),
+            mtime,
+            time_placeholder=(
+                NO_DIRECTORY_ENTRY_TEXT
+                if path_type == borgmatic_browse.archive.Path_type.DIRECTORY.value
+                else ''
+            ),
+        ),
         id=relative_path_components[0],
     )
     option.prompt_text = ' '.join(

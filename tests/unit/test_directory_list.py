@@ -106,14 +106,78 @@ def test_make_size_path_prompt_puts_path_after_both_columns():
     assert prompt.plain.index('path') == module.OPTION_SIZE_COLUMN_WIDTH + 2 + 16 + 2
 
 
-def expect_size_path_prompt(prompt, size, path_text):
+def test_no_directory_entry_text_is_the_literal_label():
+    assert module.NO_DIRECTORY_ENTRY_TEXT == '<no dir entry>'
+
+
+def test_make_size_path_prompt_without_mtime_shows_placeholder_in_time_column():
+    prompt = module.make_size_path_prompt(
+        None, 'path', time_placeholder=module.NO_DIRECTORY_ENTRY_TEXT
+    )
+
+    assert prompt.plain == f'            {"<no dir entry>":<16}  path'
+
+
+def test_make_size_path_prompt_with_falsy_mtime_shows_placeholder():
+    prompt = module.make_size_path_prompt(None, 'path', '', time_placeholder='nope')
+
+    assert prompt.plain == f'            {"nope":<16}  path'
+
+
+def test_make_size_path_prompt_with_mtime_ignores_placeholder():
+    flexmock(module.borgmatic_browse.times).should_receive('format_time').with_args(
+        '2026-10-31T17:50:09'
+    ).and_return('2026-10-31 17:50')
+
+    prompt = module.make_size_path_prompt(
+        None, 'path', '2026-10-31T17:50:09', time_placeholder=module.NO_DIRECTORY_ENTRY_TEXT
+    )
+
+    assert prompt.plain == '            2026-10-31 17:50  path'
+    assert '<no dir entry>' not in prompt.plain
+
+
+def test_make_size_path_prompt_with_default_placeholder_is_blank_time_column():
+    assert module.make_size_path_prompt(None, 'path').plain == (
+        module.make_size_path_prompt(None, 'path', time_placeholder='').plain
+    )
+    assert module.make_size_path_prompt(None, 'path').plain == f'            {BLANK_TIME}  path'
+
+
+def test_make_size_path_prompt_with_placeholder_lines_up_paths():
+    with_placeholder = module.make_size_path_prompt(
+        0, 'path', time_placeholder=module.NO_DIRECTORY_ENTRY_TEXT
+    ).plain
+    with_time = module.make_size_path_prompt(0, 'path', '2026-10-31T17:50:09').plain
+
+    assert with_placeholder.index('path') == with_time.index('path')
+    assert len(with_placeholder) == len(with_time)
+
+
+def test_make_size_path_prompt_styles_placeholder_dim():
+    console = rich.console.Console()
+    prompt = module.make_size_path_prompt(
+        1024, 'path', time_placeholder=module.NO_DIRECTORY_ENTRY_TEXT
+    )
+
+    assert prompt.get_style_at_offset(console, prompt.plain.index('<no dir entry>')).dim
+    assert not prompt.get_style_at_offset(console, prompt.plain.index('path')).dim
+    assert not prompt.get_style_at_offset(console, prompt.plain.index('1.02')).dim
+
+
+def expect_size_path_prompt(prompt, size, path_text, placeholder=''):
     '''
     Make make_size_path_prompt() expect the given size and path text (with no time, since these
-    tests pass none) and return the given prompt.
+    tests pass none) and the given time placeholder, and return the given prompt.
     '''
 
-    def fake_make_size_path_prompt(actual_size, actual_path_text, mtime=None):
-        assert (actual_size, actual_path_text, mtime) == (size, path_text, None)
+    def fake_make_size_path_prompt(actual_size, actual_path_text, mtime=None, time_placeholder=''):
+        assert (actual_size, actual_path_text, mtime, time_placeholder) == (
+            size,
+            path_text,
+            None,
+            placeholder,
+        )
 
         return prompt
 
@@ -142,7 +206,7 @@ def test_make_directory_list_option_with_file_path_makes_file_option():
 
 def test_make_directory_list_option_with_directory_path_makes_directory_option():
     prompt = flexmock()
-    expect_size_path_prompt(prompt, 2048, '📁 baz')
+    expect_size_path_prompt(prompt, 2048, '📁 baz', module.NO_DIRECTORY_ENTRY_TEXT)
     flexmock(module.borgmatic_browse.sizes).should_receive('format_size').with_args(
         2048
     ).and_return('2.05 kB')
@@ -160,7 +224,7 @@ def test_make_directory_list_option_with_directory_path_makes_directory_option()
 
 def test_make_directory_list_option_with_contained_file_path_makes_directory_option():
     prompt = flexmock()
-    expect_size_path_prompt(prompt, 0, '📁 bar')
+    expect_size_path_prompt(prompt, 0, '📁 bar', module.NO_DIRECTORY_ENTRY_TEXT)
     flexmock(module.borgmatic_browse.sizes).should_receive('format_size').with_args(0).and_return(
         '0 B'
     )
@@ -183,7 +247,7 @@ def test_make_directory_list_option_with_contained_file_path_makes_directory_opt
 
 def test_make_directory_list_option_with_contained_symlink_path_has_no_link_target():
     prompt = flexmock()
-    expect_size_path_prompt(prompt, 0, '📁 mnt')
+    expect_size_path_prompt(prompt, 0, '📁 mnt', module.NO_DIRECTORY_ENTRY_TEXT)
     flexmock(module.borgmatic_browse.sizes).should_receive('format_size').with_args(0).and_return(
         '0 B'
     )
@@ -274,7 +338,7 @@ def test_make_directory_list_option_shows_mtime_in_prompt():
 def test_make_directory_list_option_passes_mtime_to_prompt():
     calls = []
 
-    def fake_make_size_path_prompt(size, path_text, mtime=None):
+    def fake_make_size_path_prompt(size, path_text, mtime=None, time_placeholder=''):
         calls.append((size, path_text, mtime))
         return flexmock()
 
@@ -365,6 +429,106 @@ def test_make_directory_list_option_without_mtime_records_no_timestamp():
 
     assert option.size == 2048
     assert option.timestamp is None
+
+
+def record_prompt_calls():
+    '''
+    Replace make_size_path_prompt() with a fake that records the time placeholder it is given.
+    '''
+    calls = []
+
+    def fake_make_size_path_prompt(size, path_text, mtime=None, time_placeholder=''):
+        calls.append(time_placeholder)
+        return flexmock()
+
+    flexmock(module).should_receive('make_size_path_prompt').replace_with(
+        fake_make_size_path_prompt
+    )
+
+    return calls
+
+
+@pytest.mark.parametrize(
+    'path_type,relative_path_components',
+    (('d', ('baz',)), ('-', ('bar', 'baz.txt')), ('l', ('bar', 'link'))),
+)
+@pytest.mark.parametrize('mtime', (None, ''))
+def test_make_directory_list_option_for_directory_without_mtime_passes_no_entry_placeholder(
+    path_type, relative_path_components, mtime
+):
+    calls = record_prompt_calls()
+
+    module.make_directory_list_option(
+        flexmock(path_type=path_type, file_path='foo/bar/baz', link_target=''),
+        relative_path_components,
+        0,
+        mtime,
+    )
+
+    assert calls == [module.NO_DIRECTORY_ENTRY_TEXT]
+
+
+def test_make_directory_list_option_for_directory_without_mtime_shows_label():
+    option = module.make_directory_list_option(
+        flexmock(path_type='d', file_path='foo/baz', link_target=''), ('baz',), 2048
+    )
+
+    assert option.prompt.plain == f'   2.05 kB  {"<no dir entry>":<16}  📁 baz'
+
+
+def test_make_directory_list_option_for_nested_path_without_mtime_shows_label():
+    option = module.make_directory_list_option(
+        flexmock(path_type='-', file_path='foo/bar/baz.txt', link_target=''),
+        ('bar', 'baz.txt'),
+        10,
+    )
+
+    assert module.NO_DIRECTORY_ENTRY_TEXT in option.prompt.plain
+    assert option.prompt.plain.endswith('📁 bar')
+
+
+def test_make_directory_list_option_for_directory_with_mtime_shows_time_not_label():
+    option = module.make_directory_list_option(
+        flexmock(path_type='d', file_path='foo/baz', link_target=''),
+        ('baz',),
+        2048,
+        '2026-10-31T17:50:09',
+    )
+
+    assert '2026-10-31 17:50' in option.prompt.plain
+    assert '<no dir entry>' not in option.prompt.plain
+
+
+@pytest.mark.parametrize('path_type', ('-', 'l', 'p', 'wtf'))
+def test_make_directory_list_option_for_non_directory_without_mtime_keeps_blank_column(path_type):
+    option = module.make_directory_list_option(
+        flexmock(path_type=path_type, file_path='foo/baz', link_target=''), ('baz',), 0
+    )
+
+    assert '<no dir entry>' not in option.prompt.plain
+    assert option.prompt.plain[12 : 12 + 16] == BLANK_TIME
+
+
+def test_make_directory_list_option_placeholder_stays_out_of_prompt_text_and_timestamp():
+    option = module.make_directory_list_option(
+        flexmock(path_type='d', file_path='foo/baz', link_target=''), ('baz',), 2048
+    )
+
+    assert '<no dir entry>' not in option.prompt_text
+    assert 'no dir entry' not in option.prompt_text
+    assert option.prompt_text == '📁 baz (2.05 kB)'
+    assert option.timestamp is None
+
+
+def test_directory_list_parent_option_has_blank_time_column_and_no_label():
+    flexmock(module.borgmatic_browse.directory_list.Directory_list).should_receive(
+        'app'
+    ).and_return(flexmock())
+
+    directory_list = make_directory_list(path_components=('etc',))
+
+    assert '<no dir entry>' not in directory_list.get_option('..').prompt.plain
+    assert directory_list.get_option('..').prompt.plain == f'            {BLANK_TIME}  📁 ..'
 
 
 def make_directory_list(**kwargs):

@@ -595,7 +595,7 @@ def test_add_archive_paths_shows_directory_with_own_entry_that_time():
     assert '2026-10-30 08:00' in directory_list.get_option('etc').prompt.plain
 
 
-def test_add_archive_paths_shows_directory_known_only_as_parent_a_blank_time():
+def test_add_archive_paths_shows_directory_known_only_as_parent_the_no_entry_label():
     directory_list, path_loaded = make_loaded_directory_list()
 
     load_batch(
@@ -608,9 +608,16 @@ def test_add_archive_paths_shows_directory_known_only_as_parent_a_blank_time():
         ),
     )
 
-    prompt_text = directory_list.get_option('etc').prompt.plain
-    assert DATE_PATTERN.search(prompt_text) is None
-    assert prompt_text == module.make_size_path_prompt(3, '📁 etc').plain
+    option = directory_list.get_option('etc')
+    assert DATE_PATTERN.search(option.prompt.plain) is None
+    assert option.prompt.plain == (
+        module.make_size_path_prompt(
+            3, '📁 etc', time_placeholder=module.NO_DIRECTORY_ENTRY_TEXT
+        ).plain
+    )
+    assert '<no dir entry>' in option.prompt.plain
+    assert '<no dir entry>' not in option.prompt_text
+    assert option.timestamp is None
 
 
 def test_add_archive_paths_replaces_prompt_when_directory_entry_arrives_after_its_children():
@@ -625,6 +632,7 @@ def test_add_archive_paths_replaces_prompt_when_directory_entry_arrives_after_it
         ),
     )
     assert DATE_PATTERN.search(directory_list.get_option('etc').prompt.plain) is None
+    assert '<no dir entry>' in directory_list.get_option('etc').prompt.plain
     flexmock(directory_list).should_call('replace_option_prompt').with_args('etc', object).once()
     flexmock(directory_list).should_receive('clear_options').never()
 
@@ -640,6 +648,7 @@ def test_add_archive_paths_replaces_prompt_when_directory_entry_arrives_after_it
         == module.make_size_path_prompt(3, '📁 etc', '2026-10-30T08:00:00').plain
     )
     assert '2026-10-30 08:00' in option.prompt_text
+    assert '<no dir entry>' not in option.prompt.plain
 
 
 def test_add_archive_paths_with_nested_path_in_later_batch_keeps_directory_time():
@@ -752,6 +761,42 @@ async def test_directory_list_paints_file_size_then_time_then_name(auckland_time
 
         assert app._exception is None
         assert line.strip() == '1.02 kB  2026-11-01 01:40  📄 a.txt'
+
+
+async def test_directory_list_paints_no_entry_label_for_parent_only_directory_lined_up(
+    auckland_time,
+):
+    directory_list = make_mounted_directory_list()
+
+    class Test_app(textual.app.App):
+        def compose(self):
+            yield directory_list
+
+    app = Test_app()
+
+    async with app.run_test() as pilot:
+        archive_paths = (
+            module.borgmatic_browse.archive.Archive_path(
+                '-', 'etc/a.txt', '', 1024, '2026-10-31T12:40:59Z'
+            ),
+            module.borgmatic_browse.archive.Archive_path(
+                'd', 'home', '', 0, '2026-10-31T12:40:59Z'
+            ),
+        )
+        directory_list.path_loaded.publish(archive_paths)
+        directory_list.on_archive_path_loaded(archive_paths)
+        await pilot.pause()
+
+        lines = [directory_list.render_line(y).text for y in range(len(directory_list.options))]
+        etc_line = next(line for line in lines if 'etc' in line)
+        home_line = next(line for line in lines if 'home' in line)
+
+        assert app._exception is None
+        assert '<no dir entry>' in etc_line
+        assert '2026-11-01 01:40' in home_line
+        assert '<no dir entry>' not in home_line
+        assert etc_line.index('<no dir entry>') == home_line.index('2026-11-01 01:40')
+        assert etc_line.index('etc') == home_line.index('home')
 
 
 def test_add_archive_paths_records_size_and_timestamp_on_new_options():

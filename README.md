@@ -69,6 +69,34 @@ Press `v` in the UI to see the logs panel and `q` to quit. In a list of archives
 to change what it's sorted by and `r` to reverse the order, or use the command palette with `c`.
 Directories stay above files however a list is sorted.
 
+## Why some directories show `<no dir entry>`
+
+`<no dir entry>` in the time column means the archive has no entry for that directory, even though
+it contains files beneath it. Borg only stores a directory if it matches your patterns, so the app
+has no time to show.
+
+This commonly comes from a trailing slash in a `patterns` rule. To Borg, a trailing slash means "the
+contents of this directory, but not the directory itself":
+
+```yaml
+patterns:
+    - R /mnt/data
+    - + /mnt/data/photos/    # Stores the contents, but not photos itself.
+    - + /mnt/data/music      # Stores music and its contents.
+    - '- **'
+```
+
+It affects more than this app. A directory that isn't stored also loses its user, group, permissions
+and times, so restoring it gives you default values for them. Removing the trailing slash fixes this
+for new archives, but not existing ones. Any parents above a matching rule (`/mnt/data` here) still
+aren't stored.
+
+To see whether an archive has an entry for a directory, look for it in Borg's listing:
+
+```bash
+borg list --format '{type} {mtime} {path}{NL}' REPOSITORY::ARCHIVE | grep -E ' mnt/data/photos$'
+```
+
 ## Known issues
 
 * Only archives matching `{hostname}-*` are listed by default, because that's borgmatic's default
