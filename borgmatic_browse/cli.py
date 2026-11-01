@@ -41,6 +41,12 @@ def parse_arguments(*unparsed_arguments):
         help='Verbosity of the logs panel: -2 (disabled), -1 (errors), 0 (answers), 1 (some), or 2 (lots), defaults to the "verbosity" configuration option',
     )
     parser.add_argument(
+        '-a',
+        '--match-archives',
+        metavar='PATTERN',
+        help='Only list archives with names, hashes, or series matching this pattern, e.g. "*" for all archives, defaults to the "match_archives" configuration option and then to archives matching the "archive_name_format" option',
+    )
+    parser.add_argument(
         '--override',
         dest='overrides',
         metavar='OPTION.SUBOPTION=VALUE',
@@ -56,6 +62,9 @@ def main():
     Load borgmatic configuration according to the command-line arguments and launch the browse UI.
     Log any configuration errors and exit with an error code instead if the configuration can't be
     loaded.
+
+    Set any match archives flag directly on each configuration rather than treating it as an
+    override, because overrides get parsed as YAML and a pattern should be taken verbatim.
 
     Configure logging before launching, because log_to_widget() relies on borgmatic's handlers
     being in place.
@@ -88,5 +97,9 @@ def main():
     if not configs:
         logger.critical('No borgmatic configuration files found')
         sys.exit(EXIT_CODE_ERROR)
+
+    if arguments.match_archives:
+        for config in configs.values():
+            config['match_archives'] = arguments.match_archives
 
     borgmatic_browse.run.run_browse(diff_arguments=None, global_arguments=None, configs=configs)

@@ -54,13 +54,15 @@ must be on your `PATH` or set with `local_path` in your configuration.
 ## Usage
 
 ```bash
-borgmatic-browse [-c PATH] [-v VERBOSITY] [--override OPTION.SUBOPTION=VALUE]
+borgmatic-browse [-c PATH] [-v VERBOSITY] [-a PATTERN] [--override OPTION.SUBOPTION=VALUE]
 ```
 
 * `-c`, `--config`: A configuration file or directory. Repeatable. Defaults to the same paths as
   borgmatic.
 * `-v`, `--verbosity`: Verbosity of the logs panel, from -2 to 2 as in borgmatic. Defaults to the
   `verbosity` configuration option.
+* `-a`, `--match-archives`: Only list archives matching this pattern. Use `-a '*'` to list all
+  archives. Defaults to the `match_archives` configuration option.
 * `--override`: Override a configuration option. Repeatable.
 
 Press `v` in the UI to see the logs panel and `q` to quit. In a list of archives or paths, press `s`
@@ -70,7 +72,8 @@ Directories stay above files however a list is sorted.
 ## Known issues
 
 * Only archives matching `{hostname}-*` are listed by default, because that's borgmatic's default
-  archive name format. Set `match_archives` or `archive_name_format` to change this.
+  archive name format. Use `-a '*'` to list them all, or set `match_archives` or
+  `archive_name_format` in your configuration.
 * If a repository needs a passphrase that isn't configured, Borg prompts for it on the terminal
   underneath the UI, and the app appears to hang on the loading indicator.
 * If the app is killed from outside, such as with a SIGTERM, it doesn't restore the terminal or

@@ -124,3 +124,90 @@ def test_main_without_any_configuration_files_logs_error_and_exits_with_error_co
         module.main()
 
     assert exit_info.value.code == module.EXIT_CODE_ERROR
+
+
+def test_main_with_match_archives_flag_sets_it_on_the_configuration():
+    configs = {'test.yaml': {'repositories': [{'path': 'test.borg'}]}}
+    flexmock(module.sys, argv=['borgmatic-browse', '-c', 'test.yaml', '--match-archives', '*'])
+    insert_load_mocks(configs, expected_config_paths=['test.yaml'])
+    flexmock(module.borgmatic.logger).should_receive('configure_logging')
+    flexmock(module.borgmatic_browse.run).should_receive('run_browse').with_args(
+        diff_arguments=None,
+        global_arguments=None,
+        configs={'test.yaml': {'repositories': [{'path': 'test.borg'}], 'match_archives': '*'}},
+    ).once()
+
+    module.main()
+
+
+def test_main_with_match_archives_flag_overrides_configured_value():
+    flexmock(module.sys, argv=['borgmatic-browse', '-c', 'test.yaml', '-a', 'sh:foo-*'])
+    insert_load_mocks(
+        {'test.yaml': {'match_archives': 'bar-*'}}, expected_config_paths=['test.yaml']
+    )
+    flexmock(module.borgmatic.logger).should_receive('configure_logging')
+    flexmock(module.borgmatic_browse.run).should_receive('run_browse').with_args(
+        diff_arguments=None,
+        global_arguments=None,
+        configs={'test.yaml': {'match_archives': 'sh:foo-*'}},
+    ).once()
+
+    module.main()
+
+
+def test_main_with_match_archives_flag_sets_it_on_every_configuration():
+    flexmock(module.sys, argv=['borgmatic-browse', '-c', 'test.yaml', '-a', '*'])
+    insert_load_mocks(
+        {'test.yaml': {}, 'other.yaml': {'match_archives': 'bar-*'}},
+        expected_config_paths=['test.yaml'],
+    )
+    flexmock(module.borgmatic.logger).should_receive('configure_logging')
+    flexmock(module.borgmatic_browse.run).should_receive('run_browse').with_args(
+        diff_arguments=None,
+        global_arguments=None,
+        configs={'test.yaml': {'match_archives': '*'}, 'other.yaml': {'match_archives': '*'}},
+    ).once()
+
+    module.main()
+
+
+def test_main_with_match_archives_flag_passes_only_overrides_to_load_configurations():
+    flexmock(
+        module.sys,
+        argv=['borgmatic-browse', '-c', 'test.yaml', '-a', 'sh:foo-*', '--override', 'foo=1'],
+    )
+    insert_load_mocks(expected_config_paths=['test.yaml'], overrides=['foo=1'])
+    flexmock(module.borgmatic.logger).should_receive('configure_logging')
+    flexmock(module.borgmatic_browse.run).should_receive('run_browse').once()
+
+    module.main()
+
+
+def test_main_without_match_archives_flag_leaves_configurations_untouched():
+    flexmock(module.sys, argv=['borgmatic-browse', '-c', 'test.yaml'])
+    insert_load_mocks(
+        {'test.yaml': {}, 'other.yaml': {'match_archives': 'bar-*'}},
+        expected_config_paths=['test.yaml'],
+    )
+    flexmock(module.borgmatic.logger).should_receive('configure_logging')
+    flexmock(module.borgmatic_browse.run).should_receive('run_browse').with_args(
+        diff_arguments=None,
+        global_arguments=None,
+        configs={'test.yaml': {}, 'other.yaml': {'match_archives': 'bar-*'}},
+    ).once()
+
+    module.main()
+
+
+def test_main_with_match_archives_flag_and_configuration_error_exits_without_running_browse():
+    error = logging.makeLogRecord(dict(levelno=logging.CRITICAL, levelname='CRITICAL', msg='oh no'))
+    flexmock(module.sys, argv=['borgmatic-browse', '-c', 'test.yaml', '-a', '*'])
+    insert_load_mocks(parse_logs=[error], expected_config_paths=['test.yaml'])
+    flexmock(module.borgmatic.logger).should_receive('configure_logging')
+    flexmock(module.logger).should_receive('handle').with_args(error).once()
+    flexmock(module.borgmatic_browse.run).should_receive('run_browse').never()
+
+    with pytest.raises(SystemExit) as exit_info:
+        module.main()
+
+    assert exit_info.value.code == module.EXIT_CODE_ERROR
