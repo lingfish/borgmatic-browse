@@ -108,7 +108,8 @@ def get_archive_paths(config, repository, archive_name):
             Archive_path(
                 path_data['type'],
                 path_data['path'],
-                path_data.get('linktarget'),
+                # Borg 2 calls this key "target".
+                path_data.get('linktarget', path_data.get('target')),
                 path_data.get('size', 0),
                 path_data.get('mtime'),
             )

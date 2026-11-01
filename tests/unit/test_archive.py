@@ -68,6 +68,96 @@ def test_get_archive_paths_returns_each_as_archive_path_with_metadata():
     )
 
 
+def test_get_archive_paths_reads_borg_1_symlink_target_from_linktarget():
+    config = {'repositories': [{'path': 'test.borg'}]}
+    flexmock(module.borgmatic.logger).should_receive('Log_prefix').and_return(flexmock())
+    flexmock(module.borgmatic.borg.version).should_receive('local_borg_version').and_return('1.4.5')
+    flexmock(module.borgmatic.borg.list).should_receive('capture_archive_listing').and_yield(
+        {
+            'type': 'l',
+            'path': 'tree/link',
+            'linktarget': 'hello.py',
+            'size': 8,
+            'mtime': '2026-10-31T17:50:09.044035',
+        },
+    )
+
+    assert tuple(module.get_archive_paths(config, config['repositories'][0], 'archive')) == (
+        module.Archive_path('l', 'tree/link', 'hello.py', 8, '2026-10-31T17:50:09.044035'),
+    )
+
+
+def test_get_archive_paths_reads_borg_2_symlink_target_from_target():
+    config = {'repositories': [{'path': 'test.borg'}]}
+    flexmock(module.borgmatic.logger).should_receive('Log_prefix').and_return(flexmock())
+    flexmock(module.borgmatic.borg.version).should_receive('local_borg_version').and_return('2.0.0')
+    flexmock(module.borgmatic.borg.list).should_receive('capture_archive_listing').and_yield(
+        {
+            'type': 'l',
+            'path': 's/lnk',
+            'target': 'a.txt',
+            'size': 5,
+            'mtime': '2026-11-01T13:13:39.316219+11:00',
+        },
+    )
+
+    assert tuple(module.get_archive_paths(config, config['repositories'][0], 'archive')) == (
+        module.Archive_path('l', 's/lnk', 'a.txt', 5, '2026-11-01T13:13:39.316219+11:00'),
+    )
+
+
+def test_get_archive_paths_prefers_linktarget_over_target_when_both_present():
+    config = {'repositories': [{'path': 'test.borg'}]}
+    flexmock(module.borgmatic.logger).should_receive('Log_prefix').and_return(flexmock())
+    flexmock(module.borgmatic.borg.version).should_receive('local_borg_version').and_return('2.0.0')
+    flexmock(module.borgmatic.borg.list).should_receive('capture_archive_listing').and_yield(
+        {'type': 'l', 'path': 's/lnk', 'linktarget': 'first.txt', 'target': 'second.txt'},
+    )
+
+    (archive_path,) = module.get_archive_paths(config, config['repositories'][0], 'archive')
+
+    assert archive_path.link_target == 'first.txt'
+
+
+def test_get_archive_paths_keeps_empty_borg_1_linktarget_for_non_symlinks():
+    config = {'repositories': [{'path': 'test.borg'}]}
+    flexmock(module.borgmatic.logger).should_receive('Log_prefix').and_return(flexmock())
+    flexmock(module.borgmatic.borg.version).should_receive('local_borg_version').and_return('1.4.5')
+    flexmock(module.borgmatic.borg.list).should_receive('capture_archive_listing').and_yield(
+        {'type': '-', 'path': 'foo.txt', 'linktarget': ''},
+    )
+
+    (archive_path,) = module.get_archive_paths(config, config['repositories'][0], 'archive')
+
+    assert archive_path.link_target == ''
+
+
+def test_get_archive_paths_gives_falsy_link_target_for_borg_2_non_symlinks():
+    config = {'repositories': [{'path': 'test.borg'}]}
+    flexmock(module.borgmatic.logger).should_receive('Log_prefix').and_return(flexmock())
+    flexmock(module.borgmatic.borg.version).should_receive('local_borg_version').and_return('2.0.0')
+    flexmock(module.borgmatic.borg.list).should_receive('capture_archive_listing').and_yield(
+        {'type': '-', 'path': 'foo.txt', 'target': ''},
+    )
+
+    (archive_path,) = module.get_archive_paths(config, config['repositories'][0], 'archive')
+
+    assert not archive_path.link_target
+
+
+def test_get_archive_paths_gives_none_link_target_without_either_key():
+    config = {'repositories': [{'path': 'test.borg'}]}
+    flexmock(module.borgmatic.logger).should_receive('Log_prefix').and_return(flexmock())
+    flexmock(module.borgmatic.borg.version).should_receive('local_borg_version').and_return('3.0')
+    flexmock(module.borgmatic.borg.list).should_receive('capture_archive_listing').and_yield(
+        {'type': '-', 'path': 'foo.txt'},
+    )
+
+    (archive_path,) = module.get_archive_paths(config, config['repositories'][0], 'archive')
+
+    assert archive_path.link_target is None
+
+
 def test_get_archive_paths_defaults_missing_size_to_zero():
     config = {'repositories': [{'path': 'test.borg'}]}
     flexmock(module.borgmatic.logger).should_receive('Log_prefix').and_return(flexmock())
