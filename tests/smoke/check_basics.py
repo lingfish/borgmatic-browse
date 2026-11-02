@@ -180,6 +180,30 @@ def main():
         'loading',
     )
 
+    crash_code = (
+        'import sys\n'
+        'import borgmatic_browse.archive, borgmatic_browse.cli\n'
+        'def crash(*args, **kwargs):\n'
+        '    raise RuntimeError("simulated crash")\n'
+        'borgmatic_browse.archive.get_repository_archives = crash\n'
+        f'sys.argv = ["borgmatic-browse", "-c", "{fixtures / "configs" / "borg1.yaml"}"]\n'
+        'sys.exit(borgmatic_browse.cli.main())\n'
+    )
+    crash_result = driver.run(
+        [sys.executable, '-c', crash_code],
+        [('borg1', '\r')],
+        timeout=20,
+        environment={**os.environ, 'BORG_BASE_DIR': str(fixtures / 'base1')},
+    )
+    crash_passed = (
+        crash_result.code == 1 and crash_result.crashed and crash_result.terminal_restored
+    )
+    failures += not crash_passed
+    print(f'{"ok  " if crash_passed else "FAIL"} A crash exits with an error status')
+
+    if not crash_passed:
+        print(f'     code={crash_result.code} crashed={crash_result.crashed}')
+
     late_repository = fixtures / 'late.borg'
     stashed_repository = fixtures / 'late.stash'
 

@@ -1,5 +1,7 @@
 import subprocess
 
+import pytest
+import textual.worker
 from flexmock import flexmock
 
 import borgmatic_browse.app
@@ -64,6 +66,50 @@ async def test_browse_app_quit_key_terminates_child_processes_and_exits():
     flexmock(borgmatic_browse.app).should_receive('terminate_child_processes').once()
 
     async with app.run_test() as pilot:
+        await pilot.press('q')
+        await pilot.pause()
+
+    assert app.return_code == 0
+
+
+async def test_browse_app_with_unexpected_error_in_worker_has_error_return_code():
+    app = borgmatic_browse.app.Browse_app(
+        configs={
+            'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
+        }
+    )
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.archive).should_receive('get_repository_archives').and_raise(
+        RuntimeError('boom')
+    )
+
+    with pytest.raises(textual.worker.WorkerFailed, match='boom'):
+        async with app.run_test() as pilot:
+            await pilot.press('enter')
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+
+    assert app.return_code == 1
+
+
+async def test_browse_app_with_borg_error_has_success_return_code_after_quitting():
+    app = borgmatic_browse.app.Browse_app(
+        configs={
+            'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
+        }
+    )
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.archive).should_receive('get_repository_archives').and_raise(
+        subprocess.CalledProcessError(13, 'borg list', output='Repository /x does not exist.')
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press('enter')
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+
+        assert app.is_running
+
         await pilot.press('q')
         await pilot.pause()
 

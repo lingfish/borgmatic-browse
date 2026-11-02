@@ -85,6 +85,16 @@ def test_main_configures_logging_before_running_browse():
     assert calls == ['logging', 'browse']
 
 
+@pytest.mark.parametrize('status', (0, 1, 2))
+def test_main_returns_the_status_from_run_browse(status):
+    flexmock(module.sys, argv=['borgmatic-browse', '-c', 'test.yaml'])
+    insert_load_mocks(expected_config_paths=['test.yaml'])
+    flexmock(module.borgmatic.logger).should_receive('configure_logging')
+    flexmock(module.borgmatic_browse.run).should_receive('run_browse').and_return(status).once()
+
+    assert module.main() == status
+
+
 def test_main_prefers_verbosity_flag_over_configured_verbosity():
     flexmock(module.sys, argv=['borgmatic-browse', '-c', 'test.yaml', '--verbosity', '2'])
     insert_load_mocks({'test.yaml': {'verbosity': -1}}, expected_config_paths=['test.yaml'])

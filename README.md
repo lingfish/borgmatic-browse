@@ -69,6 +69,9 @@ Press `v` in the UI to see the logs panel and `q` to quit. In a list of archives
 to change what it's sorted by and `r` to reverse the order, or use the command palette with `c`.
 Directories stay above files however a list is sorted.
 
+The exit status is 0 after quitting normally, even if a Borg error was shown along the way, and
+non-zero if the configuration can't be loaded or the app crashes.
+
 ## Why some directories show `<no dir entry>`
 
 `<no dir entry>` in the time column means the archive has no entry for that directory, even though

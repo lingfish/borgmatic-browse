@@ -8,11 +8,12 @@ def run_browse(
 ):
     '''
     Run the "browse" action for the given borgmatic configurations. This launches a console UI.
+    Return an exit status: Zero if the app exited normally, or non-zero if it crashed.
 
     Raise ValueError if the Textual library (a prerequisite for this action) can't be imported.
     '''
     if not configs:
-        return
+        return 0
 
     logging.getLogger('asyncio').setLevel(logging.WARNING)
 
@@ -27,3 +28,5 @@ def run_browse(
 
     app = borgmatic_browse.app.Browse_app(configs)
     app.run()
+
+    return app.return_code or 0

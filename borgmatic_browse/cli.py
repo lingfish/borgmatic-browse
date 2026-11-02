@@ -82,9 +82,9 @@ def prevent_passphrase_prompts(configs):
 
 def main():
     '''
-    Load borgmatic configuration according to the command-line arguments and launch the browse UI.
-    Log any configuration errors and exit with an error code instead if the configuration can't be
-    loaded.
+    Load borgmatic configuration according to the command-line arguments and launch the browse UI,
+    returning its exit status. Log any configuration errors and exit with an error code instead if
+    the configuration can't be loaded.
 
     Set any match archives flag directly on each configuration rather than treating it as an
     override, because overrides get parsed as YAML and a pattern should be taken verbatim.
@@ -127,4 +127,6 @@ def main():
 
     prevent_passphrase_prompts(configs)
 
-    borgmatic_browse.run.run_browse(diff_arguments=None, global_arguments=None, configs=configs)
+    return borgmatic_browse.run.run_browse(
+        diff_arguments=None, global_arguments=None, configs=configs
+    )
