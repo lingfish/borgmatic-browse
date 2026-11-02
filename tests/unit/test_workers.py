@@ -1,7 +1,6 @@
 import subprocess
 
 import pytest
-import rich.markup
 from flexmock import flexmock
 
 from borgmatic_browse import workers as module
@@ -419,12 +418,12 @@ def failure_detail(error):
 def make_browse_app(detail):
     '''
     Given the expected error detail, return a fake Browse_app that expects exactly one error
-    notification whose message includes the escaped detail.
+    notification whose message includes the literal detail and that isn't parsed as markup.
     '''
     browse_app = flexmock()
     browse_app.should_receive('notify').replace_with(
-        lambda message, severity=None: (
-            None if severity == 'error' and rich.markup.escape(detail) in message else 1 / 0
+        lambda message, severity=None, markup=True: (
+            None if severity == 'error' and markup is False and detail in message else 1 / 0
         )
     ).once()
 
@@ -465,7 +464,7 @@ def test_add_repository_archives_with_empty_output_failure_reports_str_of_error(
     )
 
 
-def test_add_repository_archives_with_failure_escapes_markup_in_notification():
+def test_add_repository_archives_with_failure_does_not_escape_markup_in_notification():
     error = subprocess.CalledProcessError(13, 'borg list', output='bad [/nope] path')
     flexmock(module.borgmatic_browse.archive).should_receive('get_repository_archives').and_raise(
         error
@@ -532,14 +531,43 @@ BORG_PASSPHRASE_ERROR = (
 
 def make_capturing_browse_app(notifications):
     '''
-    Given a list, return a fake Browse_app that appends each (message, severity) notification to it.
+    Given a list, return a fake Browse_app that appends each (message, severity) notification to it,
+    provided that the notification isn't parsed as markup.
     '''
     browse_app = flexmock()
     browse_app.should_receive('notify').replace_with(
-        lambda message, severity=None: notifications.append((message, severity))
+        lambda message, severity=None, markup=True: (
+            notifications.append((message, severity)) if markup is False else 1 / 0
+        )
     )
 
     return browse_app
+
+
+@pytest.mark.parametrize(
+    'detail',
+    ('x[$var]', 'back\\', 'end\\[', 'a\\[b]', 'bad[/name]', '[bold]x', '[/]', 'plain'),
+)
+def test_report_loading_error_notifies_with_literal_message_and_markup_disabled(detail):
+    notifications = []
+    flexmock(module.logger).should_receive('error').with_args(
+        f'Error listing repository: {detail}'
+    ).once()
+    browse_app = flexmock()
+    browse_app.should_receive('notify').replace_with(
+        lambda *args, **kwargs: notifications.append((args, kwargs))
+    )
+
+    module.report_loading_error(
+        browse_app,
+        'Error listing repository',
+        subprocess.CalledProcessError(13, 'borg list', output=detail),
+        {},
+    )
+
+    assert notifications == [
+        ((f'Error listing repository: {detail}',), {'severity': 'error', 'markup': False})
+    ]
 
 
 def test_no_passphrase_message_mentions_the_configuration_option():
@@ -561,7 +589,7 @@ def test_report_loading_error_with_empty_passphrase_and_borg_passphrase_error_ex
 
     assert notifications == [
         (
-            rich.markup.escape(f'Error listing repository: {module.NO_PASSPHRASE_MESSAGE}'),
+            f'Error listing repository: {module.NO_PASSPHRASE_MESSAGE}',
             'error',
         )
     ]
@@ -619,7 +647,7 @@ def test_add_repository_archives_with_empty_passphrase_and_borg_passphrase_error
 
     assert notifications == [
         (
-            rich.markup.escape(f'Error listing repository: {module.NO_PASSPHRASE_MESSAGE}'),
+            f'Error listing repository: {module.NO_PASSPHRASE_MESSAGE}',
             'error',
         )
     ]
@@ -644,7 +672,7 @@ def test_load_archive_paths_with_empty_passphrase_and_borg_passphrase_error_expl
 
     assert notifications == [
         (
-            rich.markup.escape(f'Error listing archive archive: {module.NO_PASSPHRASE_MESSAGE}'),
+            f'Error listing archive archive: {module.NO_PASSPHRASE_MESSAGE}',
             'error',
         )
     ]
@@ -670,7 +698,7 @@ def test_load_file_preview_with_empty_passphrase_and_borg_passphrase_error_expla
 
     assert notifications == [
         (
-            rich.markup.escape(f'Error loading foo/bar/baz.txt: {module.NO_PASSPHRASE_MESSAGE}'),
+            f'Error loading foo/bar/baz.txt: {module.NO_PASSPHRASE_MESSAGE}',
             'error',
         )
     ]

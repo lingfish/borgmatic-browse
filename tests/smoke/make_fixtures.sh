@@ -137,6 +137,8 @@ name=borg1-all write_config borg1-all borg1all "$target/repo1.borg" \
     "encryption_passphrase: $PASSPHRASE" "local_path: $target/borg1/bin/borg" "match_archives: '*'"
 name=borg2 write_config borg2 borg2 "$target/repo2.borg" \
     "encryption_passphrase: $PASSPHRASE" "local_path: $target/borg2/bin/borg" "match_archives: '*'"
+name=markup-path write_config markup-path markuppath "$target/x[\$var].borg" \
+    "encryption_passphrase: $PASSPHRASE" "local_path: $target/borg1/bin/borg"
 name=empty-repo write_config empty-repo emptyrepo "$target/empty.borg" \
     "encryption_passphrase: $PASSPHRASE" "local_path: $target/borg1/bin/borg"
 name=late-repo write_config late-repo laterepo "$target/late.borg" \

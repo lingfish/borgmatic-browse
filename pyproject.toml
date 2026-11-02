@@ -17,7 +17,7 @@ dependencies = [
     "binaryornot>=0.6.0",
     "psutil",
     "rich",
-    "textual>=2.0.3,<9",
+    "textual>=8.0,<9",
 ]
 
 [project.urls]

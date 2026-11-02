@@ -181,6 +181,12 @@ def main():
     )
 
     check(
+        'An error containing something like markup displays literally',
+        'markup-path',
+        [('markuppath', '\r'), ('does not exist', 'q')],
+        'x[$var].borg',
+    )
+    check(
         'A pattern matching nothing says so',
         'borg1',
         [('borg1', '\r'), ('No archives match', 's'), ('sort: name', 'q')],

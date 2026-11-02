@@ -64,7 +64,7 @@ requires-dist = [
     { name = "borgmatic", specifier = ">=2.2.0,<2.3" },
     { name = "psutil" },
     { name = "rich" },
-    { name = "textual", specifier = ">=2.0.3,<9" },
+    { name = "textual", specifier = ">=8.0,<9" },
 ]
 
 [package.metadata.requires-dev]

@@ -1,6 +1,7 @@
 import subprocess
 
 import pytest
+import textual.widgets._toast
 import textual.worker
 from flexmock import flexmock
 
@@ -160,3 +161,30 @@ async def test_browse_app_with_borg_error_loading_archives_stays_running_and_not
         await pilot.pause()
 
         assert isinstance(app.focused, borgmatic_browse.repositories_list.Repositories_list)
+
+
+@pytest.mark.parametrize(
+    'text',
+    ('x[$var]', 'back\\', 'end\\[', 'a\\[b]', 'bad[/name]', '[bold]x', '[/]', 'plain'),
+)
+async def test_browse_app_with_markup_like_borg_error_shows_it_literally_in_notification(text):
+    app = borgmatic_browse.app.Browse_app(
+        configs={
+            'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
+        }
+    )
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.archive).should_receive('get_repository_archives').and_raise(
+        subprocess.CalledProcessError(13, 'borg', output=text)
+    )
+
+    async with app.run_test(notifications=True) as pilot:
+        await pilot.press('enter')
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+
+        assert app._exception is None
+
+        toasts = app.screen.query(textual.widgets._toast.Toast)
+        assert len(toasts) == 1
+        assert toasts.first().render().plain == f'Error listing repository: {text}'

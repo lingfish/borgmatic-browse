@@ -2,7 +2,6 @@ import logging
 import os
 import subprocess
 
-import rich.markup
 import textual
 import textual.signal
 
@@ -41,8 +40,8 @@ def report_loading_error(browse_app, description, error, config):
     If Borg rejected an empty passphrase, say that no passphrase is configured, as Borg's error
     implies that the user supplied a wrong one.
 
-    Escape the notification because the message contains arbitrary text like Borg output and paths,
-    which might look like Rich markup.
+    Don't parse the notification as markup, because the message contains arbitrary text like Borg
+    output and paths, which might look like markup.
     '''
     detail = getattr(error, 'output', None) or str(error)
 
@@ -52,7 +51,7 @@ def report_loading_error(browse_app, description, error, config):
     message = f'{description}: {detail}'
 
     logger.error(message)
-    browse_app.notify(rich.markup.escape(message), severity='error')
+    browse_app.notify(message, severity='error', markup=False)
 
 
 class Directory(dict):
