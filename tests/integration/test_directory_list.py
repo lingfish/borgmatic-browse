@@ -962,3 +962,39 @@ def test_on_archive_path_loaded_with_loading_done_applies_sort_after_removing_lo
     flexmock(directory_list).should_receive('apply_sort').once().ordered()
 
     directory_list.on_archive_path_loaded(data=module.borgmatic_browse.workers.LOADING_DONE)
+
+
+@pytest.mark.parametrize(
+    'path_components,failed,expected',
+    (
+        (None, True, True),
+        (None, False, False),
+        (('etc',), True, False),
+        (('etc',), False, False),
+    ),
+)
+def test_directory_list_load_failed_is_true_only_for_failed_root_list(
+    path_components, failed, expected
+):
+    flexmock(module.borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    path_loaded = module.borgmatic_browse.workers.Archive_path_loaded(flexmock(), 'Bob')
+    path_loaded.failed = failed
+    directory_list = module.Directory_list(
+        config=flexmock(),
+        repository=flexmock(),
+        archive_name='archive',
+        path_loaded=path_loaded,
+        path_components=path_components,
+    )
+
+    assert directory_list.load_failed is expected
+
+
+def test_directory_list_load_failed_is_read_only():
+    flexmock(module.borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    directory_list = module.Directory_list(
+        config=flexmock(), repository=flexmock(), archive_name='archive'
+    )
+
+    with pytest.raises(AttributeError):
+        directory_list.load_failed = True

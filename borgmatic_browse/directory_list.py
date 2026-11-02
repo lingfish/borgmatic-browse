@@ -292,6 +292,14 @@ class Directory_list(borgmatic_browse.sorting.Sortable, textual.widgets.OptionLi
         if not self.path_loaded.complete:
             self.timer = borgmatic_browse.loading.add_inline_loading_indicator(self)
 
+    @property
+    def load_failed(self):
+        '''
+        Return whether loading archive paths failed, but only for a root directory list. A non-root
+        directory list shares its paths with the root, so recreating it wouldn't load them again.
+        '''
+        return not self.path_components and self.path_loaded.failed
+
     def on_mount(self):
         '''
         When this widget gets mounted in the DOM, subscribe to path loaded events so that we can

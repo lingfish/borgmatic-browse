@@ -82,7 +82,11 @@ class Archive_loaded(textual.signal.Signal):
     Each subscribed callback call includes the archive as an Archive instance. Given the lack of
     other identifying information (configuration file, repository), there should be a separate
     Archive_loaded instance per repository.
+
+    The "failed" attribute records whether loading failed.
     '''
+
+    failed = False
 
 
 @textual.work(thread=True)
@@ -98,6 +102,7 @@ def add_repository_archives(browse_app, archive_loaded, config, repository):
     try:
         archives = borgmatic_browse.archive.get_repository_archives(config, repository)
     except LOADING_ERRORS as error:
+        archive_loaded.failed = True
         report_loading_error(browse_app, 'Error listing repository', error, config)
         archive_loaded.publish(LOADING_DONE)
         return
@@ -246,7 +251,11 @@ class Archive_path_loaded(textual.signal.Signal):
     Each subscrided callback call includes a batch of Archive_path instances. There is intended to
     be a separate Archive_path_loaded instance per archive, but that instance should be shared among
     several different widgets for the same archive for performance reasons.
+
+    The "failed" attribute records whether loading failed.
     '''
+
+    failed = False
 
     def __init__(self, owner, name):
         self.path_hierarchy = {}
@@ -299,6 +308,7 @@ def load_archive_paths(browse_app, path_loaded, config, repository, archive_name
                 path_loaded.publish(tuple(batch))
                 batch.clear()
     except LOADING_ERRORS as error:
+        path_loaded.failed = True
         report_loading_error(browse_app, f'Error listing archive {archive_name}', error, config)
 
     if batch:
@@ -315,7 +325,11 @@ class File_preview_loaded(textual.signal.Signal):
     Each published callback includes a the file's contents as a string. Given the lack of other
     identifying information (configuration file, repository, archive), there should be a separate
     Archive_loaded instance per previewed file.
+
+    The "failed" attribute records whether loading failed.
     '''
+
+    failed = False
 
 
 @textual.work(thread=True)
@@ -341,6 +355,7 @@ def load_file_preview(
             config, repository, archive_name, file_path
         )
     except LOADING_ERRORS as error:
+        file_preview_loaded.failed = True
         report_loading_error(browse_app, f'Error loading {file_path}', error, config)
         file_preview_loaded.publish(LOADING_FAILED)
         return

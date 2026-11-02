@@ -679,3 +679,136 @@ def test_load_file_preview_with_empty_passphrase_and_borg_passphrase_error_expla
 def test_loading_failed_is_distinct_from_none_and_loading_done():
     assert module.LOADING_FAILED is not None
     assert module.LOADING_FAILED is not module.LOADING_DONE
+
+
+def make_recording_signal():
+    '''
+    Return a fake signal that starts out not failed, along with a list that records the (data,
+    failed) pair for each publish, where failed is the signal's failed flag at that moment.
+    '''
+    published = []
+    signal = flexmock(failed=False)
+    signal.should_receive('publish').replace_with(
+        lambda data: published.append((data, signal.failed))
+    )
+
+    return signal, published
+
+
+@pytest.mark.parametrize('error', FAILURES)
+def test_add_repository_archives_with_failure_marks_signal_failed_before_publishing(error):
+    flexmock(module.borgmatic_browse.archive).should_receive('get_repository_archives').and_raise(
+        error
+    )
+    flexmock(module.logger).should_receive('error')
+    archive_loaded, published = make_recording_signal()
+
+    module.add_repository_archives.__wrapped__(
+        browse_app=flexmock(notify=lambda *args, **kwargs: None),
+        archive_loaded=archive_loaded,
+        config={},
+        repository=flexmock(),
+    )
+
+    assert archive_loaded.failed is True
+    assert published == [(module.LOADING_DONE, True)]
+
+
+@pytest.mark.parametrize('error', FAILURES)
+def test_load_archive_paths_with_failure_marks_signal_failed_before_publishing(error):
+    def failing_paths(*args, **kwargs):
+        yield 'foo.txt'
+        raise error
+
+    flexmock(module.borgmatic_browse.archive).should_receive('get_archive_paths').replace_with(
+        failing_paths
+    )
+    flexmock(module.logger).should_receive('error')
+    path_loaded, published = make_recording_signal()
+
+    module.load_archive_paths.__wrapped__(
+        browse_app=flexmock(notify=lambda *args, **kwargs: None),
+        path_loaded=path_loaded,
+        config={},
+        repository=flexmock(),
+        archive_name='archive',
+    )
+
+    assert path_loaded.failed is True
+    assert published == [(('foo.txt',), True), (module.LOADING_DONE, True)]
+
+
+@pytest.mark.parametrize('error', FAILURES)
+def test_load_file_preview_with_failure_marks_signal_failed_before_publishing(error):
+    flexmock(module.borgmatic_browse.archive).should_receive('get_archive_file_content').and_raise(
+        error
+    )
+    flexmock(module.logger).should_receive('error')
+    file_preview_loaded, published = make_recording_signal()
+
+    module.load_file_preview.__wrapped__(
+        browse_app=flexmock(notify=lambda *args, **kwargs: None),
+        file_preview_loaded=file_preview_loaded,
+        config={},
+        repository=flexmock(),
+        archive_name='archive',
+        file_path='foo.txt',
+    )
+
+    assert file_preview_loaded.failed is True
+    assert published == [(module.LOADING_FAILED, True)]
+
+
+def test_add_repository_archives_without_failure_leaves_signal_not_failed():
+    archive = module.borgmatic_browse.archive.Archive('1', 'foo', '2026-10-31 17:40')
+    flexmock(module.borgmatic_browse.archive).should_receive('get_repository_archives').and_return(
+        (archive,)
+    )
+    archive_loaded, published = make_recording_signal()
+
+    module.add_repository_archives.__wrapped__(
+        browse_app=flexmock(),
+        archive_loaded=archive_loaded,
+        config={},
+        repository=flexmock(),
+    )
+
+    assert archive_loaded.failed is False
+    assert published == [(archive, False), (module.LOADING_DONE, False)]
+
+
+def test_load_archive_paths_without_failure_leaves_signal_not_failed():
+    flexmock(module.borgmatic_browse.archive).should_receive('get_archive_paths').and_yield(
+        'foo.txt'
+    )
+    path_loaded, published = make_recording_signal()
+
+    module.load_archive_paths.__wrapped__(
+        browse_app=flexmock(),
+        path_loaded=path_loaded,
+        config={},
+        repository=flexmock(),
+        archive_name='archive',
+    )
+
+    assert path_loaded.failed is False
+    assert published == [(('foo.txt',), False), (module.LOADING_DONE, False)]
+
+
+def test_load_file_preview_without_failure_leaves_signal_not_failed():
+    flexmock(module.borgmatic_browse.archive).should_receive('get_archive_file_content').and_return(
+        'hi'
+    )
+    file_preview_loaded, published = make_recording_signal()
+
+    module.load_file_preview.__wrapped__(
+        browse_app=flexmock(),
+        file_preview_loaded=file_preview_loaded,
+        config={},
+        repository=flexmock(),
+        archive_name='archive',
+        file_path='foo.txt',
+    )
+
+    assert file_preview_loaded.failed is False
+    assert published == [('hi', False)]

@@ -36,7 +36,7 @@ install_borg() {
 install_borg borg1 "$BORG_1_VERSION"
 install_borg borg2 "$BORG_2_VERSION"
 
-rm -rf base1 base2 repo1.borg repo2.borg source scripts configs
+rm -rf base1 base2 repo1.borg repo2.borg late.borg late.stash source scripts configs log-borg.log
 mkdir -p base1 base2 scripts configs
 
 # A tree with varied sizes, times and types, for sorting and display.
@@ -71,6 +71,15 @@ borg1/bin/borg init --encryption=repokey repo1.borg 2> /dev/null
     "$target/borg1/bin/borg" create "$target/repo1.borg::$hostname-implicit" implicit/a/b/c.txt
 )
 
+# A repository moved out of place, so that a test can move it back while the app is running, like
+# plugging in a disk.
+borg1/bin/borg init --encryption=repokey late.borg 2> /dev/null
+(
+    cd source
+    "$target/borg1/bin/borg" create "$target/late.borg::$hostname-late" tree
+)
+mv late.borg late.stash
+
 # Borg 2: Two identically named archives with different contents.
 export BORG_BASE_DIR="$target/base2"
 export BORG_REPO="$target/repo2.borg"
@@ -101,6 +110,11 @@ cat > scripts/fail-list-borg <<EOF
 case " \$* " in *"::"*) echo "simulated listing failure" >&2; exit 2;; esac
 exec "$target/borg1/bin/borg" "\$@"
 EOF
+cat > scripts/log-borg <<EOF
+#!/bin/sh
+case " \$* " in *" --version "*) ;; *) echo "\$*" >> "$target/log-borg.log";; esac
+exec "$target/borg1/bin/borg" "\$@"
+EOF
 chmod +x scripts/*
 
 # Given a configuration name and a label, then a repository and any further lines, write a
@@ -119,6 +133,10 @@ name=borg1-all write_config borg1-all borg1all "$target/repo1.borg" \
     "encryption_passphrase: $PASSPHRASE" "local_path: $target/borg1/bin/borg" "match_archives: '*'"
 name=borg2 write_config borg2 borg2 "$target/repo2.borg" \
     "encryption_passphrase: $PASSPHRASE" "local_path: $target/borg2/bin/borg" "match_archives: '*'"
+name=late-repo write_config late-repo laterepo "$target/late.borg" \
+    "encryption_passphrase: $PASSPHRASE" "local_path: $target/borg1/bin/borg"
+name=log write_config log logrepo "$target/repo1.borg" \
+    "encryption_passphrase: $PASSPHRASE" "local_path: $target/scripts/log-borg"
 name=missing-repo write_config missing-repo missingrepo "$target/nope.borg" \
     "encryption_passphrase: $PASSPHRASE" "local_path: $target/borg1/bin/borg"
 name=wrong-passphrase write_config wrong-passphrase wrongpass "$target/repo1.borg" \

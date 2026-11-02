@@ -1,3 +1,4 @@
+import pytest
 import textual.widgets.option_list
 from flexmock import flexmock
 
@@ -70,3 +71,24 @@ def test_file_preview_on_file_preview_loaded_with_loading_failed_displays_error(
     ).once()
 
     file_preview.on_file_preview_loaded(module.borgmatic_browse.workers.LOADING_FAILED)
+
+
+@pytest.mark.parametrize('failed', (True, False))
+def test_file_preview_load_failed_reflects_file_preview_loaded_signal(failed):
+    flexmock(module.borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    file_preview = module.File_preview(
+        config=flexmock(), repository=flexmock(), archive_name='archive', file_path='foo.txt'
+    )
+    file_preview.file_preview_loaded.failed = failed
+
+    assert file_preview.load_failed is failed
+
+
+def test_file_preview_load_failed_is_read_only():
+    flexmock(module.borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    file_preview = module.File_preview(
+        config=flexmock(), repository=flexmock(), archive_name='archive', file_path='foo.txt'
+    )
+
+    with pytest.raises(AttributeError):
+        file_preview.load_failed = True

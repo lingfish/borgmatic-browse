@@ -53,6 +53,13 @@ class File_preview(textual.widgets.RichLog):
 
         self.loading_timer = borgmatic_browse.loading.add_inline_loading_indicator(self)
 
+    @property
+    def load_failed(self):
+        '''
+        Return whether loading the file into this panel failed.
+        '''
+        return self.file_preview_loaded.failed
+
     def on_mount(self):
         '''
         When this widget gets mounted in the DOM, subscribe to archive loaded events so that we can

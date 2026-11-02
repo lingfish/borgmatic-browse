@@ -142,9 +142,19 @@ class Carousel(textual.containers.Horizontal):
 
     def action_next(self, option_id):
         '''
-        Hide the current focused panel and create the next one.
+        Hide the current focused panel and create the next one. If the next panel already exists,
+        reuse it to avoid loading it again. But if it failed to load, discard it and any panels after
+        it, so that selecting it again retries, e.g. after plugging in a disk.
         '''
         next_panel_index = self.panels.index(self.focused_panel) + 1
+
+        if next_panel_index < len(self.panels) and getattr(
+            self.panels[next_panel_index], 'load_failed', False
+        ):
+            for panel in self.panels[next_panel_index:]:
+                panel.remove()
+
+            del self.panels[next_panel_index:]
 
         if next_panel_index < len(self.panels):
             next_panel = self.panels[next_panel_index]

@@ -413,3 +413,20 @@ async def test_archives_list_loading_done_resorts_in_current_order():
         archives_list.on_archive_loaded(module.borgmatic_browse.workers.LOADING_DONE)
 
         assert option_ids(archives_list) == ['id2', 'id1', 'id3']
+
+
+@pytest.mark.parametrize('failed', (True, False))
+def test_archives_list_load_failed_reflects_archive_loaded_signal(failed):
+    flexmock(module.borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    archives_list = module.Archives_list(config=flexmock(), repository=flexmock())
+    archives_list.archive_loaded.failed = failed
+
+    assert archives_list.load_failed is failed
+
+
+def test_archives_list_load_failed_is_read_only():
+    flexmock(module.borgmatic_browse.loading).should_receive('add_inline_loading_indicator')
+    archives_list = module.Archives_list(config=flexmock(), repository=flexmock())
+
+    with pytest.raises(AttributeError):
+        archives_list.load_failed = True

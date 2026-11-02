@@ -60,7 +60,8 @@ def run(command, steps=(), timeout=25, environment=None):
     step, and an optional environment dict, run the command in a pseudo-terminal and return a Result.
 
     Each step is a tuple of a regular expression to wait for on the screen and then the keys to send,
-    which may be empty. Stop at the first wait that times out. Then wait for the command to exit, and
+    which may be empty. The keys may instead be a callable that returns them, for changing something
+    at that point in the run. Stop at the first wait that times out. Then wait for the command to exit, and
     kill it if it doesn't.
     '''
     process_id, descriptor = pty.fork()
@@ -114,9 +115,11 @@ def run(command, steps=(), timeout=25, environment=None):
 
         shots.append(get_screen_text(screen))
 
-        if keys and alive:
+        keys_to_send = keys() if callable(keys) else keys
+
+        if keys_to_send and alive:
             time.sleep(SECONDS_BEFORE_KEY)
-            os.write(descriptor, keys.encode())
+            os.write(descriptor, keys_to_send.encode())
 
     tail_start = len(output)
     end_time = time.monotonic() + (EXIT_WAIT_AFTER_FAILURE_SECONDS if failed else EXIT_WAIT_SECONDS)

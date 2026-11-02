@@ -180,6 +180,52 @@ def main():
         'loading',
     )
 
+    late_repository = fixtures / 'late.borg'
+    stashed_repository = fixtures / 'late.stash'
+
+    def restore_repository():
+        '''
+        Move the stashed repository into place, like plugging in a disk, and return the key to go
+        back.
+        '''
+        stashed_repository.rename(late_repository)
+
+        return 'h'
+
+    try:
+        check(
+            'Selecting again after a missing repository appears retries',
+            'late-repo',
+            [
+                ('laterepo', '\r'),
+                ('does not exist', restore_repository),
+                (r'📦 repositories', '\r'),
+                (r'late.*\(latest\)', 'q'),
+            ],
+            f'{host}-late',
+        )
+    finally:
+        late_repository.rename(stashed_repository)
+
+    log_path = fixtures / 'log-borg.log'
+    log_path.unlink(missing_ok=True)
+    check(
+        'Selecting again after a successful load reuses it',
+        'log',
+        [
+            ('logrepo', '\r'),
+            (r'\(latest\)', 'h'),
+            (r'📦 repositories', '\r'),
+            (r'\(latest\)', 'q'),
+        ],
+        '(latest)',
+    )
+    run_count = len(log_path.read_text().splitlines())
+
+    if run_count != 1:
+        failures += 1
+        print(f'FAIL Borg ran {run_count} times rather than once when reusing a panel')
+
     print(f'{failures} failed')
 
     return 1 if failures else 0
