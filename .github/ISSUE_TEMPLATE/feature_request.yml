@@ -20,4 +20,4 @@ body:
       label: Upstream reference (if applicable)
       placeholder: link to upstream issue / PR / docs
     validations:
-      required: true
+      required: false
