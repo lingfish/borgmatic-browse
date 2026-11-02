@@ -29,7 +29,7 @@ def test_archives_list_on_archive_loaded_with_loading_done_removes_loading_indic
     flexmock(module.borgmatic_browse.loading).should_receive(
         'add_inline_loading_indicator'
     ).and_return(loading_timer)
-    archives_list = module.Archives_list(config=flexmock(), repository=flexmock())
+    archives_list = module.Archives_list(config={}, repository=flexmock())
     flexmock(loading_timer).should_receive('stop')
     flexmock(archives_list).should_receive('remove_option').with_args('loading-indicator').once()
     flexmock(archives_list).should_receive('apply_sort').once()
@@ -217,7 +217,7 @@ def test_archives_list_on_archive_loaded_with_loading_done_applies_sort_after_re
     flexmock(module.borgmatic_browse.loading).should_receive(
         'add_inline_loading_indicator'
     ).and_return(loading_timer)
-    archives_list = module.Archives_list(config=flexmock(), repository=flexmock())
+    archives_list = module.Archives_list(config={}, repository=flexmock())
     flexmock(loading_timer).should_receive('stop')
     flexmock(archives_list).should_receive('remove_option').with_args(
         'loading-indicator'
@@ -430,3 +430,210 @@ def test_archives_list_load_failed_is_read_only():
 
     with pytest.raises(AttributeError):
         archives_list.load_failed = True
+
+
+@pytest.mark.parametrize(
+    'config,expected',
+    (
+        ({'match_archives': '*'}, 'This repository has no archives.'),
+        ({'match_archives': 're:.*'}, 'This repository has no archives.'),
+        ({'match_archives': 'sh:*'}, 'This repository has no archives.'),
+        (
+            {'match_archives': 'host-*'},
+            'No archives match "host-*". Use -a \'*\' to list them all.',
+        ),
+        (
+            {'match_archives': 'bad[/x]'},
+            'No archives match "bad[/x]". Use -a \'*\' to list them all.',
+        ),
+        (
+            {},
+            "No archives match the configured archive name format. Use -a '*' to list them all.",
+        ),
+        (
+            {'match_archives': None},
+            "No archives match the configured archive name format. Use -a '*' to list them all.",
+        ),
+    ),
+)
+def test_make_no_archives_message_describes_why_no_archives_are_shown(config, expected):
+    assert module.make_no_archives_message(config) == expected
+
+
+def test_no_archives_option_id_is_no_archives():
+    assert module.NO_ARCHIVES_OPTION_ID == 'no-archives'
+
+
+def make_no_archives_app(config=None, failed=False):
+    '''
+    Return an Archives_list with the given configuration dict and an app to run it in. Loading is
+    mocked out, so the caller decides which signals the list receives.
+    '''
+    flexmock(module.borgmatic_browse.workers).should_receive('add_repository_archives')
+    archives_list = module.Archives_list(
+        config={'match_archives': 'bad[/x]'} if config is None else config,
+        repository=flexmock(),
+    )
+    archives_list.archive_loaded.failed = failed
+
+    class Test_app(textual.app.App):
+        def compose(self):
+            yield archives_list
+
+    return archives_list, Test_app()
+
+
+async def test_archives_list_with_no_archives_loaded_adds_one_disabled_dim_text_option():
+    archives_list, app = make_no_archives_app()
+
+    async with app.run_test():
+        archives_list.on_archive_loaded(module.borgmatic_browse.workers.LOADING_DONE)
+
+        assert option_ids(archives_list) == ['no-archives']
+        option = archives_list.get_option('no-archives')
+        assert option.disabled is True
+        assert isinstance(option.prompt, rich.text.Text)
+        assert option.prompt.plain == (
+            'No archives match "bad[/x]". Use -a \'*\' to list them all.'
+        )
+        assert option.prompt.style == 'dim'
+
+
+async def test_archives_list_with_no_archives_loaded_and_all_archives_pattern_says_repository_is_empty():
+    archives_list, app = make_no_archives_app(config={'match_archives': '*'})
+
+    async with app.run_test():
+        archives_list.on_archive_loaded(module.borgmatic_browse.workers.LOADING_DONE)
+
+        option = archives_list.get_option('no-archives')
+        assert option.prompt.plain == 'This repository has no archives.'
+
+
+async def test_archives_list_with_no_archives_loaded_removes_loading_indicator():
+    archives_list, app = make_no_archives_app()
+
+    async with app.run_test():
+        archives_list.on_archive_loaded(module.borgmatic_browse.workers.LOADING_DONE)
+
+        assert 'loading-indicator' not in option_ids(archives_list)
+
+
+async def test_archives_list_with_failed_loading_does_not_add_no_archives_option():
+    archives_list, app = make_no_archives_app(failed=True)
+
+    async with app.run_test():
+        archives_list.on_archive_loaded(module.borgmatic_browse.workers.LOADING_DONE)
+
+        assert 'no-archives' not in option_ids(archives_list)
+
+
+async def test_archives_list_with_loaded_archives_does_not_add_no_archives_option():
+    archives_list, app = make_no_archives_app()
+
+    async with app.run_test():
+        archives_list.on_archive_loaded(
+            module.borgmatic_browse.archive.Archive('id', 'archive', '2026-10-31 17:40')
+        )
+        archives_list.on_archive_loaded(module.borgmatic_browse.workers.LOADING_DONE)
+
+        assert option_ids(archives_list) == ['id']
+
+
+async def test_archives_list_does_not_select_or_raise_when_enter_is_pressed_on_no_archives_option():
+    archives_list, app = make_no_archives_app()
+    selected = []
+
+    class Recording_app(type(app)):
+        def on_option_list_option_selected(self, event):
+            selected.append(event.option_id)
+
+    app = Recording_app()
+
+    async with app.run_test() as pilot:
+        archives_list.on_archive_loaded(module.borgmatic_browse.workers.LOADING_DONE)
+        archives_list.focus()
+        await pilot.pause()
+
+        assert option_ids(archives_list) == ['no-archives']
+
+        await pilot.press('enter')
+        await pilot.pause()
+
+        assert selected == []
+        assert app._exception is None
+
+
+async def test_archives_list_sort_options_keeps_no_archives_option_last_in_every_mode_and_direction():
+    archives_list, app = make_no_archives_app()
+
+    async with app.run_test():
+        options = [
+            textual.widgets.option_list.Option('No archives', id='no-archives', disabled=True)
+        ]
+
+        for sort_mode in ('time', 'name'):
+            for sort_reversed in (False, True):
+                archives_list.sort_mode = sort_mode
+                archives_list.sort_reversed = sort_reversed
+
+                assert [option.id for option in archives_list.sort_options(options)] == [
+                    'no-archives'
+                ]
+
+
+@pytest.mark.parametrize(
+    'sort_mode,sort_reversed,expected',
+    (
+        ('time', False, ['id2', 'id1']),
+        ('time', True, ['id1', 'id2']),
+        ('name', False, ['id1', 'id2']),
+        ('name', True, ['id2', 'id1']),
+    ),
+)
+async def test_archives_list_sort_options_puts_no_archives_option_after_archives(
+    sort_mode, sort_reversed, expected
+):
+    archives_list, app = make_no_archives_app()
+
+    async with app.run_test():
+        archives_list.on_archive_loaded(
+            module.borgmatic_browse.archive.Archive('id1', 'aaa', '2026-10-31 17:40')
+        )
+        archives_list.on_archive_loaded(
+            module.borgmatic_browse.archive.Archive('id2', 'zzz', '2026-10-30 17:40')
+        )
+        # Like loading done does, drop the loading indicator before the other option goes in.
+        archives_list.remove_option('loading-indicator')
+        archives_list.sort_mode = sort_mode
+        archives_list.sort_reversed = sort_reversed
+        options = [
+            textual.widgets.option_list.Option('No archives', id='no-archives', disabled=True),
+            *archives_list.options,
+        ]
+
+        assert [option.id for option in archives_list.sort_options(options)] == [
+            *expected,
+            'no-archives',
+        ]
+
+
+async def test_archives_list_sorting_with_no_archives_option_does_not_raise_and_updates_subtitle():
+    archives_list, app = make_no_archives_app()
+
+    async with app.run_test() as pilot:
+        archives_list.on_archive_loaded(module.borgmatic_browse.workers.LOADING_DONE)
+        archives_list.focus()
+        await pilot.pause()
+
+        for key, subtitle in (
+            ('s', 'sort: name ↑'),
+            ('r', 'sort: name ↓'),
+            ('s', 'sort: time ↓'),
+            ('r', 'sort: time ↑'),
+        ):
+            await pilot.press(key)
+            await pilot.pause()
+
+            assert app._exception is None
+            assert archives_list.border_subtitle == subtitle
+            assert option_ids(archives_list) == ['no-archives']

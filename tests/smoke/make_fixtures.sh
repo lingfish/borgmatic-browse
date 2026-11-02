@@ -36,7 +36,8 @@ install_borg() {
 install_borg borg1 "$BORG_1_VERSION"
 install_borg borg2 "$BORG_2_VERSION"
 
-rm -rf base1 base2 repo1.borg repo2.borg late.borg late.stash source scripts configs log-borg.log
+rm -rf base1 base2 repo1.borg repo2.borg empty.borg late.borg late.stash source scripts configs \
+    log-borg.log
 mkdir -p base1 base2 scripts configs
 
 # A tree with varied sizes, times and types, for sorting and display.
@@ -70,6 +71,9 @@ borg1/bin/borg init --encryption=repokey repo1.borg 2> /dev/null
     sleep 1
     "$target/borg1/bin/borg" create "$target/repo1.borg::$hostname-implicit" implicit/a/b/c.txt
 )
+
+# A repository with no archives at all.
+borg1/bin/borg init --encryption=repokey empty.borg 2> /dev/null
 
 # A repository moved out of place, so that a test can move it back while the app is running, like
 # plugging in a disk.
@@ -133,6 +137,8 @@ name=borg1-all write_config borg1-all borg1all "$target/repo1.borg" \
     "encryption_passphrase: $PASSPHRASE" "local_path: $target/borg1/bin/borg" "match_archives: '*'"
 name=borg2 write_config borg2 borg2 "$target/repo2.borg" \
     "encryption_passphrase: $PASSPHRASE" "local_path: $target/borg2/bin/borg" "match_archives: '*'"
+name=empty-repo write_config empty-repo emptyrepo "$target/empty.borg" \
+    "encryption_passphrase: $PASSPHRASE" "local_path: $target/borg1/bin/borg"
 name=late-repo write_config late-repo laterepo "$target/late.borg" \
     "encryption_passphrase: $PASSPHRASE" "local_path: $target/borg1/bin/borg"
 name=log write_config log logrepo "$target/repo1.borg" \

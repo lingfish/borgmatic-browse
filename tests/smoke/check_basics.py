@@ -180,6 +180,28 @@ def main():
         'loading',
     )
 
+    check(
+        'A pattern matching nothing says so',
+        'borg1',
+        [('borg1', '\r'), ('No archives match', 's'), ('sort: name', 'q')],
+        '''No archives match "nothing-[/x]". Use -a '*' to list them all.''',
+        '-a',
+        'nothing-[/x]',
+    )
+    check(
+        'The default filter matching nothing says so',
+        'empty-repo',
+        [('emptyrepo', '\r'), ('No archives match', 'q')],
+        'configured archive name format',
+    )
+    check(
+        'A repository with no archives says so',
+        'empty-repo',
+        [('emptyrepo', '\r'), ('no archives', 'q')],
+        'This repository has no archives.',
+        '-a',
+        '*',
+    )
     crash_code = (
         'import sys\n'
         'import borgmatic_browse.archive, borgmatic_browse.cli\n'

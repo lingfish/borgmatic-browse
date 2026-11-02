@@ -6,6 +6,24 @@ import borgmatic_browse.loading
 import borgmatic_browse.sorting
 import borgmatic_browse.workers
 
+NO_ARCHIVES_OPTION_ID = 'no-archives'
+MATCH_ALL_ARCHIVES_PATTERNS = {'*', 're:.*', 'sh:*'}
+
+
+def make_no_archives_message(config):
+    '''
+    Given a configuration dict, return a message explaining why a list of archives is empty.
+    '''
+    pattern = config.get('match_archives')
+
+    if pattern in MATCH_ALL_ARCHIVES_PATTERNS:
+        return 'This repository has no archives.'
+
+    if pattern:
+        return f'''No archives match "{pattern}". Use -a '*' to list them all.'''
+
+    return "No archives match the configured archive name format. Use -a '*' to list them all."
+
 
 class Archives_list(borgmatic_browse.sorting.Sortable, textual.widgets.OptionList):
     '''
@@ -73,6 +91,17 @@ class Archives_list(borgmatic_browse.sorting.Sortable, textual.widgets.OptionLis
         if archive is borgmatic_browse.workers.LOADING_DONE:
             self.loading_timer.stop()
             self.remove_option('loading-indicator')
+
+            # If loading failed, then the error is already showing as the explanation.
+            if not self.archive_names and not self.archive_loaded.failed:
+                self.add_option(
+                    textual.widgets.option_list.Option(
+                        rich.text.Text(make_no_archives_message(self.config), style='dim'),
+                        id=NO_ARCHIVES_OPTION_ID,
+                        disabled=True,
+                    )
+                )
+
             self.apply_sort()
             return
 
@@ -105,14 +134,14 @@ class Archives_list(borgmatic_browse.sorting.Sortable, textual.widgets.OptionLis
     def sort_options(self, options):
         '''
         Given options, return them in display order for the current sort mode and direction, with
-        the loading indicator last.
+        any options that aren't archives last, like the loading indicator.
 
         Order by time using the order the archives loaded in, newest first, rather than their times,
         because the times have only minute resolution and archives can share a minute. So
         "reversed" means load order, as newest first is what it means for the other time sorts.
         '''
-        archive_options = [option for option in options if option.id != 'loading-indicator']
-        loading_options = [option for option in options if option.id == 'loading-indicator']
+        archive_options = [option for option in options if option.id in self.archive_names]
+        other_options = [option for option in options if option.id not in self.archive_names]
 
         if self.sort_mode == 'name':
             sorted_options = sorted(
@@ -127,7 +156,7 @@ class Archives_list(borgmatic_browse.sorting.Sortable, textual.widgets.OptionLis
                 reverse=not self.sort_reversed,
             )
 
-        return [*sorted_options, *loading_options]
+        return [*sorted_options, *other_options]
 
     def on_option_list_option_highlighted(self, event):
         '''
