@@ -225,3 +225,212 @@ async def test_file_preview_does_not_scroll_horizontally_when_lines_fit_the_pane
 async def test_file_preview_with_empty_contents_does_not_raise():
     async with running_preview(''):
         pass
+
+
+# Issue #10: toggling word wrap.
+
+
+def test_file_preview_has_visible_wrap_binding():
+    bindings = [
+        binding
+        for binding in module.File_preview.BINDINGS
+        if isinstance(binding, textual.binding.Binding) and binding.key == 'w'
+    ]
+
+    assert len(bindings) == 1
+    assert bindings[0].action == 'toggle_wrap'
+    assert bindings[0].description == 'wrap'
+    assert bindings[0].show is True
+
+
+@pytest.mark.parametrize('width', (120, 60))
+async def test_file_preview_wrap_key_wraps_contents_to_fit_panel(width):
+    async with running_preview(LONG_LINE + '\nsecond', size=(width, 30)) as (_app, pilot, preview):
+        line_count = len(preview.lines)
+        assert 'word0' in rendered_words(preview)
+
+        await pilot.press('w')
+        await pilot.pause()
+
+        assert 'word0' in rendered_words(preview)
+        assert 'word59' in rendered_words(preview)
+        assert 'ENDMARK' in rendered_words(preview)
+        assert 'second' in rendered_words(preview)
+        assert len(preview.lines) > line_count
+        assert preview.virtual_size.width <= preview.scrollable_content_region.width
+        assert preview.max_scroll_x == 0
+
+
+@pytest.mark.parametrize('width', (120, 60))
+async def test_file_preview_wrap_key_twice_restores_unwrapped_rendering(width):
+    async with running_preview(LONG_LINE + '\nsecond', size=(width, 30)) as (_app, pilot, preview):
+        line_count = len(preview.lines)
+        virtual_width = preview.virtual_size.width
+        assert 'word0' in rendered_words(preview)
+
+        await pilot.press('w')
+        await pilot.pause()
+        assert len(preview.lines) > line_count
+
+        await pilot.press('w')
+        await pilot.pause()
+
+        assert 'ENDMARK' in rendered_words(preview)
+        assert len(preview.lines) == line_count
+        assert preview.virtual_size.width == virtual_width
+        assert preview.max_scroll_x > 0
+
+
+async def test_file_preview_toggling_wrap_does_not_duplicate_contents():
+    async with running_preview(LONG_LINE) as (_app, pilot, preview):
+        assert rendered_words(preview).count('word0') == 1
+
+        for _ in range(3):
+            await pilot.press('w')
+            await pilot.pause()
+
+            assert rendered_words(preview).count('word0') == 1
+
+
+@pytest.mark.parametrize('start_width,new_width', ((120, 60), (60, 120)))
+async def test_file_preview_with_wrap_on_rewraps_when_terminal_is_resized(start_width, new_width):
+    async with running_preview(LONG_LINE, size=(start_width, 30)) as (_app, pilot, preview):
+        await pilot.press('w')
+        await pilot.pause()
+        assert 'word0' in rendered_words(preview)
+        old_line_count = len(preview.lines)
+
+        await pilot.resize_terminal(new_width, 30)
+        await pilot.pause()
+
+        assert 'word0' in rendered_words(preview)
+        assert 'ENDMARK' in rendered_words(preview)
+        assert rendered_words(preview).count('word0') == 1
+        assert preview.virtual_size.width <= preview.scrollable_content_region.width
+        assert preview.max_scroll_x == 0
+        assert (len(preview.lines) < old_line_count) == (new_width > start_width)
+
+
+async def test_file_preview_does_not_notify_again_on_toggle_or_resize():
+    async with running_preview(OVER_CAP_LINE) as (app, pilot, _preview):
+        assert len(notification_messages(app)) == 1
+
+        await pilot.press('w')
+        await pilot.pause()
+        await pilot.resize_terminal(60, 30)
+        await pilot.pause()
+        await pilot.press('w')
+        await pilot.pause()
+        await pilot.resize_terminal(100, 30)
+        await pilot.pause()
+
+        assert len(notification_messages(app)) == 1
+
+
+async def test_file_preview_with_wrap_on_does_not_cut_off_lines_over_the_maximum():
+    async with running_preview(OVER_CAP_LINE) as (_app, pilot, preview):
+        assert 'word0' in rendered_words(preview)
+        assert 'ENDMARK' not in rendered_words(preview)
+
+        await pilot.press('w')
+        await pilot.pause()
+
+        assert 'word0' in rendered_words(preview)
+        assert 'ENDMARK' in rendered_words(preview)
+
+
+@pytest.mark.parametrize('toggles', (1, 2))
+async def test_file_preview_toggling_wrap_keeps_approximate_scroll_position(toggles):
+    contents = '\n'.join(f'row{i:03d} {LONG_LINE}' for i in range(150))
+
+    async with running_preview(contents) as (_app, pilot, preview):
+        assert 'row000' in rendered_words(preview)
+        assert preview.max_scroll_y > 0
+
+        preview.scroll_to(y=preview.max_scroll_y // 2, animate=False)
+        await pilot.pause()
+        before = preview.scroll_y / preview.max_scroll_y
+        assert before > 0.4
+
+        for _ in range(toggles):
+            await pilot.press('w')
+            await pilot.pause()
+
+        assert preview.max_scroll_y > 0
+        assert preview.scroll_y / preview.max_scroll_y == pytest.approx(before, abs=0.1)
+
+
+async def test_file_preview_toggling_wrap_at_top_stays_at_top():
+    contents = '\n'.join(f'row{i:03d} {LONG_LINE}' for i in range(150))
+
+    async with running_preview(contents) as (_app, pilot, preview):
+        assert 'row000' in rendered_words(preview)
+
+        await pilot.press('w')
+        await pilot.pause()
+
+        assert preview.scroll_y == 0
+        assert 'row000' in rendered_words(preview)
+
+
+@pytest.mark.parametrize(
+    'contents',
+    (
+        NOT_LOADED,
+        module.borgmatic_browse.workers.LOADING_FAILED,
+        None,
+    ),
+)
+async def test_file_preview_wrap_key_without_loaded_contents_leaves_message_unchanged(contents):
+    async with running_preview(contents) as (_app, pilot, preview):
+        before = rendered_text(preview)
+        assert before.strip()
+
+        await pilot.press('w')
+        await pilot.pause()
+
+        assert rendered_text(preview) == before
+
+
+async def test_file_preview_wrap_state_is_per_preview():
+    async with running_preview(LONG_LINE) as (_app, pilot, preview):
+        await pilot.press('w')
+        await pilot.pause()
+        assert preview.max_scroll_x == 0
+
+    async with running_preview(LONG_LINE) as (_app, _pilot, new_preview):
+        assert 'word0' in rendered_words(new_preview)
+        assert new_preview.max_scroll_x > 0
+
+
+async def test_file_preview_with_wrap_on_rewraps_when_resized_while_hidden():
+    async with running_preview(LONG_LINE, size=(120, 30)) as (app, pilot, preview):
+        await pilot.press('w')
+        await pilot.pause()
+        assert 'word0' in rendered_words(preview)
+
+        preview.styles.display = 'none'
+        await pilot.pause()
+        await pilot.resize_terminal(60, 30)
+        await pilot.pause()
+        preview.styles.display = 'block'
+        await pilot.pause()
+
+        assert 'word0' in rendered_words(preview)
+        assert 'ENDMARK' in rendered_words(preview)
+        assert preview.virtual_size.width <= preview.scrollable_content_region.width
+        assert preview.max_scroll_x == 0
+        assert app._exception is None
+
+
+async def test_file_preview_toggling_wrap_on_while_scrolled_right_resets_horizontal_scroll():
+    async with running_preview(LONG_LINE) as (_app, pilot, preview):
+        preview.scroll_to(x=30, animate=False)
+        await pilot.pause()
+        assert preview.scroll_x > 0
+
+        await pilot.press('w')
+        await pilot.pause()
+
+        assert 'word0' in rendered_words(preview)
+        assert preview.scroll_x == 0

@@ -67,8 +67,8 @@ borgmatic-browse [-c PATH] [-v VERBOSITY] [-a PATTERN] [--override OPTION.SUBOPT
 
 Press `v` in the UI to see the logs panel and `q` to quit. In a list of archives or paths, press `s`
 to change what it's sorted by and `r` to reverse the order, or use the command palette with `c`.
-Directories stay above files however a list is sorted. In a file preview, long lines scroll
-sideways with `→` and `←`, and are cut off at 2,000 columns.
+Directories stay above files however a list is sorted. In a file preview, press `w` to toggle word
+wrap. Without it, long lines scroll sideways with `→` and `←`, and are cut off at 2,000 columns.
 
 The exit status is 0 after quitting normally, even if a Borg error was shown along the way, and
 non-zero if the configuration can't be loaded or the app crashes.

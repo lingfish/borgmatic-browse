@@ -47,6 +47,7 @@ class File_preview(textual.widgets.RichLog):
         textual.binding.Binding(
             key='pagedown', action='page_down', description='page down', show=True, priority=True
         ),
+        textual.binding.Binding(key='w', action='toggle_wrap', description='wrap', show=True),
     )
 
     def __init__(self, config, repository, archive_name, file_path, archive_label=None):
@@ -65,6 +66,8 @@ class File_preview(textual.widgets.RichLog):
         super().__init__(classes='panel')
         self.border_title = f'📄 {self.file_path} preview'
         self.auto_scroll = False
+        self.file_contents = None
+        self.rendered_panel_width = None
         self.file_preview_loaded = borgmatic_browse.workers.File_preview_loaded(
             self, 'file preview loaded'
         )
@@ -110,28 +113,74 @@ class File_preview(textual.widgets.RichLog):
         elif file_contents is None:
             self.write('Cannot display a preview for this file')
         else:
-            longest_line_width = get_longest_line_width(file_contents)
+            self.file_contents = file_contents
+            self.render_file_contents()
 
-            # Pass the width explicitly, because otherwise RichLog limits the content to the width of
-            # the console and imposes a minimum width that's wider than a narrow panel.
-            #
-            # Only pass the file path and not its contents to guess_lexer(). Passing the contents is
-            # more accurate, but also much slower.
-            self.write(
-                rich.syntax.Syntax(
-                    file_contents,
-                    rich.syntax.Syntax.guess_lexer(self.file_path),
-                    tab_size=TAB_SIZE,
-                ),
-                width=max(
-                    min(longest_line_width, MAXIMUM_PREVIEW_WIDTH),
-                    self.scrollable_content_region.width,
-                    1,
-                ),
-            )
-
-            if longest_line_width > MAXIMUM_PREVIEW_WIDTH:
+            if get_longest_line_width(file_contents) > MAXIMUM_PREVIEW_WIDTH:
                 self.notify(
                     f'Lines over {MAXIMUM_PREVIEW_WIDTH} columns are cut off. Press w to wrap them.',
                     severity='warning',
                 )
+
+    def render_file_contents(self):
+        '''
+        Render the loaded file contents (syntax highlighted) into this widget, wrapped to the width
+        of the panel if wrapping is on. Otherwise, make them wide enough for the longest line, up to
+        a maximum, so that they scroll horizontally. Stay at about the same relative position in the
+        file, since the number of rendered lines may have changed.
+
+        Pass the width explicitly, because otherwise RichLog limits the content to the width of the
+        console and imposes a minimum width that's wider than a narrow panel.
+        '''
+        panel_width = self.scrollable_content_region.width
+        scroll_fraction = self.scroll_y / self.max_scroll_y if self.max_scroll_y else 0
+        self.rendered_panel_width = panel_width
+
+        self.clear()
+
+        # Only pass the file path and not its contents to guess_lexer(). Passing the contents is
+        # more accurate, but also much slower.
+        self.write(
+            rich.syntax.Syntax(
+                self.file_contents,
+                rich.syntax.Syntax.guess_lexer(self.file_path),
+                tab_size=TAB_SIZE,
+                word_wrap=self.wrap,
+            ),
+            width=panel_width
+            if self.wrap
+            else max(
+                min(get_longest_line_width(self.file_contents), MAXIMUM_PREVIEW_WIDTH),
+                panel_width,
+                1,
+            ),
+        )
+
+        if scroll_fraction:
+            self.scroll_to(y=scroll_fraction * self.max_scroll_y, animate=False)
+
+    def action_toggle_wrap(self):
+        '''
+        Toggle word wrapping of the file contents, if any have loaded.
+        '''
+        if self.file_contents is None:
+            return
+
+        self.wrap = not self.wrap
+        self.render_file_contents()
+
+    def on_resize(self, event):
+        '''
+        When the panel changes width, render the file contents again to fit it, since rendered lines
+        have a fixed width. Do so after RichLog has handled the same event, as that's when it starts
+        rendering content rather than deferring it.
+
+        Ignore a zero width, which means that the panel is hidden, and any resize that doesn't change
+        the width, as rendering changes this widget's virtual size and that counts as a resize too.
+        '''
+        if (
+            self.file_contents is not None
+            and event.size.width
+            and self.scrollable_content_region.width != self.rendered_panel_width
+        ):
+            self.call_later(self.render_file_contents)

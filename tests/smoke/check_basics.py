@@ -149,10 +149,22 @@ def main():
         'LONGEND',
     )
     check(
+        'Borg 1: w wraps a long line',
+        'borg1-all',
+        [*long_file_steps(8), ('LONGSTART', 'w'), ('LONGEND', 'q')],
+        'LONGEND',
+    )
+    check(
         'Borg 1: a line over the maximum width says it was cut off',
         'borg1-all',
         [*long_file_steps(6), ('cut off', 'q')],
         'Press w',
+    )
+    check(
+        'Borg 1: wrapping a line over the maximum width shows its end',
+        'borg1-all',
+        [*long_file_steps(6), ('HUGESTART', 'w\x1b[F'), ('HUGEEND', 'q')],
+        'HUGEEND',
     )
     check(
         'Borg 1: left scrolls a preview back rather than leaving it',
