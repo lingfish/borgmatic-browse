@@ -5,6 +5,8 @@ versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.5.0 - 2026-11-03
+
 ### Added
 
 * #10: Press `w` in a file preview to toggle word wrap.
