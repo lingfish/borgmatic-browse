@@ -5,6 +5,8 @@ versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.6.0 - 2026-11-03
+
 ### Added
 
 * #9: Press `b` to open a shell, and type `exit` to return to where you were. The shell has
