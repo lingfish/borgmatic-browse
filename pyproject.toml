@@ -141,6 +141,11 @@ multiline-quotes = "single"
 known-first-party = ["borgmatic_browse"]
 
 [tool.ruff.lint.per-file-ignores]
+"docs/screenshots/*.py" = [
+    "PLR2004",  # magic value
+    "S603",  # subprocess call
+    "T201",  # print statement
+]
 "tests/smoke/*.py" = [
     "PLR0915",  # too many statements
     "PLR2004",  # magic value

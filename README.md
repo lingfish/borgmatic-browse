@@ -7,6 +7,22 @@ A [Textual](https://textual.textualize.io/) terminal UI for browsing the Borg ar
 repositories in your [borgmatic](https://torsion.org/borgmatic/) configuration: drill down from
 configuration file to repository, archive, directory, and file preview.
 
+![A directory in an archive, sorted by size](https://raw.githubusercontent.com/lingfish/borgmatic-browse/main/docs/screenshots/directory-listing.png)
+
+## Features
+
+* Browse every repository in your borgmatic configuration, with no mounting, extracting or extra setup.
+* See the size and modification time of every path, with each directory's size added up from the files
+  beneath it.
+* Sort archives and paths by name, size or time with `s`, and reverse the order with `r`.
+* Preview files with syntax highlighting, and toggle word wrap with `w`.
+* Pipe any file to a command like `jq .` or `wc -l` with `|`, and see its output in a window.
+* Open a shell with `b` and come back to where you were.
+* See what Borg is doing in the logs panel with `v`, and find any command in the palette with `c`.
+* Works with Borg 1 and Borg 2.
+
+See [the screenshots](#screenshots) for more.
+
 ## Not an official project
 
 borgmatic-browse is **derived from borgmatic, but it is not part of borgmatic, and it is not an
@@ -93,6 +109,20 @@ non-zero if the configuration can't be loaded or the app crashes.
 See [CHANGELOG.md](https://github.com/lingfish/borgmatic-browse/blob/main/CHANGELOG.md) for what's
 changed in each version.
 
+## Screenshots
+
+The archives in a repository, newest first:
+
+![The archives in a repository](https://raw.githubusercontent.com/lingfish/borgmatic-browse/main/docs/screenshots/archives.png)
+
+A file preview with syntax highlighting:
+
+![A preview of a borgmatic configuration file](https://raw.githubusercontent.com/lingfish/borgmatic-browse/main/docs/screenshots/file-preview.png)
+
+A file piped to `jq -C .`, which keeps jq's colours:
+
+![The output of piping package.json to jq](https://raw.githubusercontent.com/lingfish/borgmatic-browse/main/docs/screenshots/pipe.png)
+
 ## Why some directories show `<no dir entry>`
 
 `<no dir entry>` in the time column means the archive has no entry for that directory, even though
@@ -149,6 +179,14 @@ uv run ruff format --check
 ```
 
 Tests must keep 100% coverage. They don't need Borg, because they mock it out.
+
+To remake the screenshots in `docs/screenshots/` from made-up demo data, give the script a Borg 1
+binary, such as the one the smoke fixtures install, and a work directory that it replaces. It needs
+`jq` and Google Chrome.
+
+```bash
+uv run python docs/screenshots/make_screenshots.py /tmp/smoke/borg1/bin/borg /tmp/screenshots
+```
 
 To try the app from the source tree:
 
