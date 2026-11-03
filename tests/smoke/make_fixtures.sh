@@ -106,6 +106,12 @@ case " \$* " in *" --version "*) exec "$target/borg1/bin/borg" "\$@";; esac
 sleep 60
 exec "$target/borg1/bin/borg" "\$@"
 EOF
+cat > scripts/pause-borg <<EOF
+#!/bin/sh
+case " \$* " in *" --version "*) exec "$target/borg1/bin/borg" "\$@";; esac
+sleep 4
+exec "$target/borg1/bin/borg" "\$@"
+EOF
 cat > scripts/fail-extract-borg <<EOF
 #!/bin/sh
 case " \$* " in *" extract "*) echo "simulated extract failure" >&2; exit 2;; esac
@@ -154,7 +160,7 @@ name=wrong-passphrase write_config wrong-passphrase wrongpass "$target/repo1.bor
 name=no-passphrase write_config no-passphrase nopass "$target/repo1.borg" \
     "local_path: $target/borg1/bin/borg"
 name=no-borg write_config no-borg noborg "$target/repo1.borg" "local_path: $target/does-not-exist"
-for script in slow fail-extract fail-list; do
+for script in slow pause fail-extract fail-list; do
     name=$script write_config "$script" "$script" "$target/repo1.borg" \
         "encryption_passphrase: $PASSPHRASE" "local_path: $target/scripts/$script-borg" \
         "match_archives: '*'"

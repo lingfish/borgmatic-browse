@@ -5,6 +5,11 @@ versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+
+* #9: Press `b` to open a shell, and type `exit` to return to where you were. The shell has
+  `BORGMATIC_BROWSE_SHELL=1` in its environment, which you can use to show it in your prompt.
+
 ## 0.5.0 - 2026-11-03
 
 ### Added

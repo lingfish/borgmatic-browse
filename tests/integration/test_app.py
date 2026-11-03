@@ -1,3 +1,4 @@
+import contextlib
 import subprocess
 
 import pytest
@@ -9,6 +10,7 @@ import borgmatic_browse.app
 import borgmatic_browse.archive
 import borgmatic_browse.archives_list
 import borgmatic_browse.configuration_files_list
+import borgmatic_browse.file_preview
 import borgmatic_browse.logs
 import borgmatic_browse.repositories_list
 
@@ -188,3 +190,154 @@ async def test_browse_app_with_markup_like_borg_error_shows_it_literally_in_noti
         toasts = app.screen.query(textual.widgets._toast.Toast)
         assert len(toasts) == 1
         assert toasts.first().render().plain == f'Error listing repository: {text}'
+
+
+def make_shell_app():
+    app = borgmatic_browse.app.Browse_app(
+        configs={'test1.yaml': {'repositories': [{'path': 'test1.borg'}]}}
+    )
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
+    flexmock(borgmatic_browse.archive).should_receive('get_repository_archives').and_return(
+        (borgmatic_browse.archive.Archive('i1', 'aa', '2026-10-30 10:00'),)
+    )
+    flexmock(borgmatic_browse.archive).should_receive('get_archive_paths').and_return(
+        (borgmatic_browse.archive.Archive_path('-', 'a.txt', '', 3, '2026-01-01T00:00:00'),)
+    )
+    flexmock(borgmatic_browse.archive).should_receive('get_archive_file_content').and_return('hi')
+
+    return app
+
+
+def stub_shell(monkeypatch):
+    '''
+    Given a monkeypatch fixture, replace App.suspend with a no-op and subprocess.run with a
+    recorder, so that no real shell ever starts, and return the list of recorded run arguments.
+    '''
+    monkeypatch.setenv('SHELL', '/bin/fancysh')
+    calls = []
+
+    @contextlib.contextmanager
+    def suspend(self):
+        yield
+
+    def run(*args, **kwargs):
+        calls.append(args)
+
+        return subprocess.CompletedProcess(args, 0)
+
+    monkeypatch.setattr(borgmatic_browse.app.Browse_app, 'suspend', suspend)
+    monkeypatch.setattr(subprocess, 'run', run)
+    monkeypatch.setattr(borgmatic_browse.app, 'get_foreground_process_group', lambda: None)
+    monkeypatch.setattr(
+        borgmatic_browse.app,
+        'restore_foreground_process_group',
+        lambda process_group: None,
+    )
+
+    return calls
+
+
+async def drill_to_panel(app, pilot, presses):
+    for key in presses:
+        await pilot.press(key)
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+
+
+@pytest.mark.parametrize(
+    'presses',
+    (
+        (),
+        ('enter',),
+        ('enter', 'enter'),
+        ('enter', 'enter', 'enter'),
+    ),
+    ids=('repositories', 'archives', 'directory', 'file preview'),
+)
+async def test_browse_app_b_key_opens_shell_from_every_panel(monkeypatch, presses):
+    calls = stub_shell(monkeypatch)
+    app = make_shell_app()
+
+    async with app.run_test() as pilot:
+        await drill_to_panel(app, pilot, presses)
+        await pilot.press('b')
+        await pilot.pause()
+
+    assert calls == [(('/bin/fancysh',),)]
+
+
+async def test_browse_app_b_key_opens_shell_from_configuration_files_list(monkeypatch):
+    calls = stub_shell(monkeypatch)
+    app = borgmatic_browse.app.Browse_app(
+        configs={
+            'test1.yaml': {'repositories': [{'path': 'test1.borg'}]},
+            'test2.yaml': {'repositories': [{'path': 'test2.borg'}]},
+        }
+    )
+    flexmock(borgmatic_browse.logs).should_receive('log_to_widget')
+
+    async with app.run_test() as pilot:
+        assert isinstance(
+            app.focused, borgmatic_browse.configuration_files_list.Configuration_files_list
+        )
+
+        await pilot.press('b')
+        await pilot.pause()
+
+    assert calls == [(('/bin/fancysh',),)]
+
+
+async def test_browse_app_b_key_from_file_preview_really_reaches_file_preview(monkeypatch):
+    calls = stub_shell(monkeypatch)
+    app = make_shell_app()
+
+    async with app.run_test() as pilot:
+        await drill_to_panel(app, pilot, ('enter', 'enter', 'enter'))
+
+        assert isinstance(app.focused, borgmatic_browse.file_preview.File_preview)
+
+        await pilot.press('b')
+        await pilot.pause()
+
+    assert len(calls) == 1
+
+
+async def test_browse_app_b_key_when_suspend_not_supported_notifies_warning_and_skips_shell(
+    monkeypatch,
+):
+    monkeypatch.setenv('SHELL', '/bin/fancysh')
+    calls = []
+    monkeypatch.setattr(subprocess, 'run', lambda *args, **kwargs: calls.append(args))
+    app = make_shell_app()
+
+    async with app.run_test(notifications=True) as pilot:
+        assert not app._driver.can_suspend
+
+        await pilot.press('b')
+        await pilot.pause()
+
+        assert app._exception is None
+        assert calls == []
+        assert [
+            (notification.message, notification.severity) for notification in app._notifications
+        ] == [('Opening a shell is not supported here', 'warning')]
+
+
+async def test_browse_app_footer_shows_shell_binding():
+    app = make_shell_app()
+
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        shown = {
+            active.binding.key: active.binding.description
+            for active in app.screen.active_bindings.values()
+            if active.binding.show and active.enabled
+        }
+
+        assert shown.get('b') == 'shell'
+
+        footer = app.query_one('Footer')
+        strips = app.screen._compositor.render_strips()
+        footer_text = ''.join(segment.text for segment in strips[footer.region.y])
+
+        assert 'b shell' in footer_text

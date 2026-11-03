@@ -26,14 +26,18 @@ def main():
     host = socket.gethostname()
     failures = 0
 
-    def check(name, config, steps, wanted, *flags, base='base1', code=0):
+    def check(name, config, steps, wanted, *flags, base='base1', code=0, user_shell=None):
         '''
         Given a check's name, a configuration name, steps for the driver, a string that the last
-        screen must contain, any flags for the app, the name of a Borg base directory, and the
-        expected exit status, run the app and report whether the check passed.
+        screen must contain, any flags for the app, the name of a Borg base directory, the expected
+        exit status, and an optional shell for the app to open, run the app and report whether the check passed.
         '''
         nonlocal failures
-        environment = {**os.environ, 'BORG_BASE_DIR': str(fixtures / base)}
+        environment = {
+            **os.environ,
+            'BORG_BASE_DIR': str(fixtures / base),
+            **({'SHELL': user_shell} if user_shell else {}),
+        }
         result = driver.run(
             [app, '-c', str(fixtures / 'configs' / f'{config}.yaml'), *flags],
             steps,
@@ -275,6 +279,60 @@ def main():
         'This repository has no archives.',
         '-a',
         '*',
+    )
+
+    # The screen keeps the UI's text while in a shell, because pyte ignores the switch away from the
+    # alternate screen. So wait for arithmetic in the shell's output, which can't match what's typed,
+    # and for the shell's output to get painted over on returning.
+    for shell in ('/bin/bash', '/bin/dash'):
+        check(
+            f'A shell opens with its marker and returns to the same panel: {shell}',
+            'borg1',
+            [
+                ('borg1', 'b'),
+                ('Type "exit"', 'echo MARKER${BORGMATIC_BROWSE_SHELL}$((40 + 2))\r'),
+                ('MARKER142', 'exit\r'),
+                (r'^(?![\s\S]*MARKER142)[\s\S]*borg1', '\r'),
+                (r'\(latest\)', 'q'),
+            ],
+            f'{host}-implicit',
+            user_shell=shell,
+        )
+        check(
+            f'Ctrl-C in a shell spares the app and a running load: {shell}',
+            'pause',
+            [
+                ('pause', '\r'),
+                ('loading', 'b'),
+                ('Type "exit"', 'sleep 30\r'),
+                ('Type "exit"', '\x03'),
+                ('Type "exit"', 'sleep 5; echo DONE$((1 + 1))\r'),
+                ('DONE2', 'exit\r'),
+                (r'\(latest\)', 'q'),
+            ],
+            '(latest)',
+            user_shell=shell,
+        )
+
+    check(
+        'A killed shell returns to the app rather than leaving it stopped',
+        'borg1',
+        [
+            ('borg1', 'b'),
+            ('Type "exit"', 'echo KILLING$((1 + 1)); kill -9 $$\r'),
+            ('KILLING2', ''),
+            (r'^(?![\s\S]*KILLING2)[\s\S]*borg1', '\r'),
+            (r'\(latest\)', 'q'),
+        ],
+        '(latest)',
+        user_shell='/bin/bash',
+    )
+    check(
+        'A shell that cannot start shows an error and leaves the app working',
+        'borg1',
+        [('borg1', 'b'), ('Error opening shell', '\r'), (r'\(latest\)', 'q')],
+        '(latest)',
+        user_shell='/no/such/[shell]',
     )
     crash_code = (
         'import sys\n'

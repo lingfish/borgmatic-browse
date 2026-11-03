@@ -70,6 +70,16 @@ to change what it's sorted by and `r` to reverse the order, or use the command p
 Directories stay above files however a list is sorted. In a file preview, press `w` to toggle word
 wrap. Without it, long lines scroll sideways with `→` and `←`, and are cut off at 2,000 columns.
 
+Press `b` to open your shell (`$SHELL`, or `/bin/sh` if that isn't set), and type `exit` to return. It
+starts in the directory you launched the app from, since the archive you're browsing isn't on disk.
+Anything your configuration provides to Borg, like a passphrase, isn't available in the shell. The shell
+has `BORGMATIC_BROWSE_SHELL=1` in its environment, so you can show it in your prompt by adding this to
+your `~/.bashrc` or `~/.zshrc`, after your prompt is set:
+
+```bash
+PS1="${BORGMATIC_BROWSE_SHELL:+(browse) }$PS1"
+```
+
 The exit status is 0 after quitting normally, even if a Borg error was shown along the way, and
 non-zero if the configuration can't be loaded or the app crashes.
 
@@ -115,6 +125,8 @@ borg list --format '{type} {mtime} {path}{NL}' REPOSITORY::ARCHIVE | grep -E ' m
 * If SSH needs a password or a host key confirmation for a remote repository, it may prompt on the
   terminal underneath the UI, and the app may get stuck and not respond to `q`. Use key-based
   authentication with a known host.
+* If `SHELL` is set to a program that isn't an interactive shell, pressing Ctrl-C in it quits the app
+  too, because only interactive shells take the terminal's Ctrl-C for themselves.
 * If the app is killed from outside, such as with a SIGTERM, it doesn't restore the terminal or
   stop a running Borg command. Quitting with `q` handles both.
 
