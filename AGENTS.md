@@ -20,6 +20,15 @@ it. See `README.md` for what it does and its known issues.
   `/etc/borgmatic*` aren't readable by this user, so test with throwaway copies. Ask the user to run
   anything that needs root.
 
+## Knowledge graph
+
+Read `graphify-out/GRAPH_REPORT.md` before reading source files or answering questions about the code.
+`graphify-out/` is gitignored, so glob and grep tools that honour `.gitignore` won't find it and an empty
+result doesn't mean it's missing. Check with `ls graphify-out/` or read the file directly.
+
+Use `graphify query "<question>"`, `graphify path "<A>" "<B>"` or `graphify explain "<concept>"` for
+questions that cross modules. After changing code, run `graphify update .`.
+
 ## Commands
 
 ```bash
