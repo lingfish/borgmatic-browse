@@ -1104,3 +1104,142 @@ async def test_carousel_next_action_removes_failed_next_panel_and_every_panel_af
         assert directory_list not in carousel.panels
         assert len(carousel.panels) == 2
         assert app._exception is None
+
+
+LONG_FILE_CONTENTS = 'START ' + 'word ' * 100 + 'END'
+
+
+def make_long_file_app():
+    app = make_retry_app()
+    flexmock(borgmatic_browse.archive).should_receive('get_repository_archives').and_return(
+        (ARCHIVES[0],)
+    )
+    flexmock(borgmatic_browse.archive).should_receive('get_archive_paths').and_yield(
+        borgmatic_browse.archive.Archive_path('-', 'long.txt', '', 3)
+    )
+    flexmock(borgmatic_browse.archive).should_receive('get_archive_file_content').and_return(
+        LONG_FILE_CONTENTS
+    )
+
+    return app
+
+
+async def open_long_file_preview(app, pilot):
+    '''
+    Given an app and its pilot, select through to the long file's preview, and return the carousel
+    and the preview once it has rendered.
+    '''
+    for _ in range(3):
+        await pilot.press('enter')
+        await wait_for_loading(app, pilot)
+
+    preview = app.focused
+    assert isinstance(preview, borgmatic_browse.file_preview.File_preview)
+    assert 'START' in rendered_lines(preview)
+    assert preview.max_scroll_x > 0
+
+    return app.query_one(selector='Carousel'), preview
+
+
+@pytest.mark.parametrize('key', ('left', 'h'))
+async def test_carousel_previous_key_with_file_preview_scrolled_right_scrolls_it_left(key):
+    app = make_long_file_app()
+
+    async with app.run_test() as pilot:
+        carousel, preview = await open_long_file_preview(app, pilot)
+        preview.scroll_to(x=24, animate=False)
+        await pilot.pause()
+        scrolled_x = preview.scroll_x
+        assert scrolled_x > 0
+
+        await pilot.press(key)
+        await pilot.wait_for_animation()
+        await pilot.pause()
+
+        assert carousel.focused_panel is preview
+        assert app.focused is preview
+        assert 0 <= preview.scroll_x < scrolled_x
+        assert app._exception is None
+
+
+@pytest.mark.parametrize('key', ('left', 'h'))
+async def test_carousel_previous_key_after_scrolling_right_with_key_returns_to_start_of_preview(
+    key,
+):
+    app = make_long_file_app()
+
+    async with app.run_test() as pilot:
+        carousel, preview = await open_long_file_preview(app, pilot)
+
+        await pilot.press('right')
+        await pilot.wait_for_animation()
+        await pilot.pause()
+        assert preview.scroll_x > 0
+
+        await pilot.press(key)
+        await pilot.wait_for_animation()
+        await pilot.pause()
+
+        assert preview.scroll_x == 0
+        assert carousel.focused_panel is preview
+        assert app.focused is preview
+
+
+@pytest.mark.parametrize('key', ('left', 'h'))
+async def test_carousel_previous_key_with_file_preview_at_left_edge_goes_to_previous_panel(key):
+    app = make_long_file_app()
+
+    async with app.run_test() as pilot:
+        carousel, preview = await open_long_file_preview(app, pilot)
+        assert preview.scroll_x == 0
+
+        await pilot.press(key)
+        await pilot.pause()
+
+        assert carousel.focused_panel is not preview
+        assert carousel.focused_panel is carousel.panels[-2]
+        assert isinstance(app.focused, borgmatic_browse.directory_list.Directory_list)
+        assert preview.styles.display == 'none'
+
+
+async def test_carousel_previous_key_after_scrolling_back_to_left_edge_goes_to_previous_panel():
+    app = make_long_file_app()
+
+    async with app.run_test() as pilot:
+        carousel, preview = await open_long_file_preview(app, pilot)
+        preview.scroll_to(x=1, animate=False)
+        await pilot.pause()
+        assert preview.scroll_x == 1
+
+        await pilot.press('left')
+        await pilot.wait_for_animation()
+        await pilot.pause()
+        assert preview.scroll_x == 0
+        assert carousel.focused_panel is preview
+
+        await pilot.press('left')
+        await pilot.pause()
+
+        assert carousel.focused_panel is not preview
+        assert isinstance(app.focused, borgmatic_browse.directory_list.Directory_list)
+
+
+@pytest.mark.parametrize('key', ('left', 'h'))
+async def test_carousel_previous_key_with_directory_list_goes_to_previous_panel(key):
+    app = make_long_file_app()
+
+    async with app.run_test() as pilot:
+        for _ in range(2):
+            await pilot.press('enter')
+            await wait_for_loading(app, pilot)
+
+        carousel = app.query_one(selector='Carousel')
+        directory_list = app.focused
+        assert isinstance(directory_list, borgmatic_browse.directory_list.Directory_list)
+
+        await pilot.press(key)
+        await pilot.pause()
+
+        assert carousel.focused_panel is not directory_list
+        assert isinstance(app.focused, borgmatic_browse.archives_list.Archives_list)
+        assert app._exception is None

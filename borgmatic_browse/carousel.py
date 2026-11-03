@@ -126,8 +126,17 @@ class Carousel(textual.containers.Horizontal):
 
     def action_previous(self):
         '''
-        Make the previous panel into the focused panel.
+        Make the previous panel into the focused panel. But if the focused panel is a file preview
+        that's scrolled to the right, scroll it left instead, since this action takes over the key
+        that would otherwise do that.
         '''
+        if (
+            isinstance(self.focused_panel, borgmatic_browse.file_preview.File_preview)
+            and self.focused_panel.scroll_x > 0
+        ):
+            self.focused_panel.action_scroll_left()
+            return
+
         previous_panel_index = self.panels.index(self.focused_panel) - 1
 
         if previous_panel_index < 0:

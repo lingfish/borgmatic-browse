@@ -49,6 +49,8 @@ head -c 300 /dev/zero > source/tree/old.txt
 head -c 3000 /dev/zero > source/tree/Newer.txt
 printf 'print("hello smoke")\n' > source/tree/hello.py
 head -c 2000 /dev/urandom > source/tree/blob.bin
+python3 -c "print('LONGSTART ' + 'word ' * 100 + 'LONGEND')" > source/tree/long.txt
+python3 -c "print('HUGESTART ' + 'word ' * 1000 + 'HUGEEND')" > source/tree/huge.txt
 ln -s hello.py source/tree/lnk
 echo x > source/implicit/a/b/c.txt
 touch -d '2020-01-01 10:00' source/tree/old.txt source/tree/adir/small.bin source/tree/adir

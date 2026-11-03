@@ -63,6 +63,20 @@ def main():
         '''
         return [(label, '\r'), (r'\(latest\)', '\r'), ('📁 tree', '\r'), (r'hello\.py', '')]
 
+    def long_file_steps(file_index):
+        '''
+        Given the index in the "tree" directory listing of a file, return steps for opening that
+        file's preview in the latest of all archives with Borg 1. Each step moves the highlight with
+        "j" until the file is reached, and the last one selects it.
+        '''
+        return [
+            ('borg1all', '\r'),
+            (r'\(latest\)', 'j'),
+            (f'{host}-1', '\r'),
+            ('📁 tree', '\r'),
+            (r'hello\.py', 'j' * file_index + '\r'),
+        ]
+
     check(
         'Borg 1: default filter hides other archives',
         'borg1',
@@ -120,6 +134,48 @@ def main():
         ],
         'sort: size ↓',
     )
+    check(
+        'Borg 1: a long line scrolls right to its end',
+        'borg1-all',
+        [
+            *long_file_steps(8),
+            # Page scrolling starts from the current position, so keys sent together collapse into
+            # one. Send each as its own step, relying on the driver's pause before each key to let
+            # the scroll animation settle.
+            ('LONGSTART', '\x1b[6;5~'),
+            *[('word', '\x1b[6;5~')] * 5,
+            ('LONGEND', 'q'),
+        ],
+        'LONGEND',
+    )
+    check(
+        'Borg 1: a line over the maximum width says it was cut off',
+        'borg1-all',
+        [*long_file_steps(6), ('cut off', 'q')],
+        'Press w',
+    )
+    check(
+        'Borg 1: left scrolls a preview back rather than leaving it',
+        'borg1-all',
+        [
+            *long_file_steps(8),
+            ('LONGSTART', '\x1b[C'),
+            (r'│ONGSTART', '\x1b[D'),
+            (r'│LONGSTART', 'q'),
+        ],
+        'long.txt preview',
+    )
+    check(
+        'Borg 1: left at the start of a preview goes to the directory listing',
+        'borg1-all',
+        [
+            *long_file_steps(8),
+            ('LONGSTART', '\x1b[D'),
+            (r'hello\.py.*\n[\s\S]*long\.txt', 'q'),
+        ],
+        'hello.py',
+    )
+
     check(
         'Borg 2: identically named archives both list',
         'borg2',

@@ -1,5 +1,6 @@
 import logging
 
+import rich.cells
 import rich.syntax
 import textual.binding
 import textual.widgets
@@ -8,6 +9,23 @@ import borgmatic_browse.loading
 import borgmatic_browse.workers
 
 logger = logging.getLogger('__name__')
+
+# The widest that unwrapped file contents get rendered. RichLog pads every rendered line to the render
+# width, so with a file's longest line as the only limit, one very long line makes all the others
+# expensive. A 100 kB file with a 50,000 column line and many short lines took seconds and gigabytes.
+MAXIMUM_PREVIEW_WIDTH = 2000
+TAB_SIZE = 4
+
+
+def get_longest_line_width(file_contents):
+    '''
+    Given a file's contents as a string, return the width in terminal cells of its longest line, with
+    tabs expanded the same way as when they're rendered.
+    '''
+    return max(
+        (rich.cells.cell_len(line.expandtabs(TAB_SIZE)) for line in file_contents.splitlines()),
+        default=0,
+    )
 
 
 class File_preview(textual.widgets.RichLog):
@@ -92,8 +110,28 @@ class File_preview(textual.widgets.RichLog):
         elif file_contents is None:
             self.write('Cannot display a preview for this file')
         else:
+            longest_line_width = get_longest_line_width(file_contents)
+
+            # Pass the width explicitly, because otherwise RichLog limits the content to the width of
+            # the console and imposes a minimum width that's wider than a narrow panel.
+            #
             # Only pass the file path and not its contents to guess_lexer(). Passing the contents is
             # more accurate, but also much slower.
             self.write(
-                rich.syntax.Syntax(file_contents, rich.syntax.Syntax.guess_lexer(self.file_path))
+                rich.syntax.Syntax(
+                    file_contents,
+                    rich.syntax.Syntax.guess_lexer(self.file_path),
+                    tab_size=TAB_SIZE,
+                ),
+                width=max(
+                    min(longest_line_width, MAXIMUM_PREVIEW_WIDTH),
+                    self.scrollable_content_region.width,
+                    1,
+                ),
             )
+
+            if longest_line_width > MAXIMUM_PREVIEW_WIDTH:
+                self.notify(
+                    f'Lines over {MAXIMUM_PREVIEW_WIDTH} columns are cut off. Press w to wrap them.',
+                    severity='warning',
+                )
