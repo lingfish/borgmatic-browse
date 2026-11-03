@@ -341,3 +341,17 @@ async def test_browse_app_footer_shows_shell_binding():
         footer_text = ''.join(segment.text for segment in strips[footer.region.y])
 
         assert 'b shell' in footer_text
+
+
+def test_browse_app_starts_with_empty_command_history():
+    app = borgmatic_browse.app.Browse_app(configs={'test.yaml': {'repositories': []}})
+
+    assert app.command_history == []
+
+
+def test_browse_app_command_history_is_not_shared_between_apps():
+    first = borgmatic_browse.app.Browse_app(configs={})
+    second = borgmatic_browse.app.Browse_app(configs={})
+    first.command_history.append('jq .')
+
+    assert second.command_history == []

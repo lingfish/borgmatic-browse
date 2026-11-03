@@ -5,6 +5,7 @@ import pytest
 import rich.console
 import rich.text
 import textual.app
+import textual.binding
 import textual.widgets
 import textual.widgets.option_list
 from flexmock import flexmock
@@ -998,3 +999,139 @@ def test_directory_list_load_failed_is_read_only():
 
     with pytest.raises(AttributeError):
         directory_list.load_failed = True
+
+
+# Issue #11: piping a file to a command.
+
+
+def test_directory_list_has_pipe_binding():
+    bindings = [
+        binding
+        for binding in module.Directory_list.BINDINGS
+        if isinstance(binding, textual.binding.Binding) and binding.key == 'vertical_line'
+    ]
+
+    assert len(bindings) == 1
+    assert bindings[0].action == 'pipe'
+    assert bindings[0].description == 'pipe'
+    assert bindings[0].key_display == '|'
+
+
+def make_pipe_directory_list(path_components, *options):
+    # Skip loading paths from an archive when the list gets mounted.
+    flexmock(module.Directory_list).should_receive('on_mount')
+    directory_list = Bare_directory_list(path_components, flexmock(path_hierarchy={}))
+    directory_list.config = {'repositories': [{'path': 'test.borg'}]}
+    directory_list.repository = {'path': 'test.borg'}
+    directory_list.archive_name = 'archive'
+    directory_list.add_options(options)
+
+    return directory_list
+
+
+class Directory_list_app(textual.app.App):
+    def __init__(self, directory_list):
+        super().__init__()
+        self.directory_list = directory_list
+
+    def compose(self):
+        yield self.directory_list
+
+
+@pytest.mark.parametrize(
+    'path_components,expected_path',
+    (((), 'foo.conf'), (('etc',), 'etc/foo.conf'), (('etc', 'nginx'), 'etc/nginx/foo.conf')),
+)
+async def test_directory_list_action_pipe_with_file_pipes_it_by_full_path(
+    path_components, expected_path
+):
+    directory_list = make_pipe_directory_list(
+        path_components, make_option('other', 'other', path_type='d'), make_option('x', 'foo.conf')
+    )
+
+    async with Directory_list_app(directory_list).run_test() as pilot:
+        directory_list.highlighted = 1
+        calls = []
+        flexmock(module.borgmatic_browse.pipe).should_receive('pipe_file').replace_with(
+            lambda *args: calls.append(args)
+        )
+        flexmock(directory_list).should_receive('notify').never()
+
+        directory_list.action_pipe()
+        await pilot.pause()
+
+        assert calls == [
+            (
+                directory_list.app,
+                directory_list.config,
+                directory_list.repository,
+                'archive',
+                expected_path,
+            )
+        ]
+
+
+@pytest.mark.parametrize('path_type', ('d', 'l', 'p'))
+async def test_directory_list_action_pipe_with_non_file_warns_instead(path_type):
+    directory_list = make_pipe_directory_list(
+        ('etc',), make_option('thing', 'thing', path_type=path_type)
+    )
+
+    async with Directory_list_app(directory_list).run_test() as pilot:
+        directory_list.highlighted = 0
+        flexmock(module.borgmatic_browse.pipe).should_receive('pipe_file').never()
+        flexmock(directory_list).should_receive('notify').with_args(
+            'Only files can be piped to a command', severity='warning'
+        ).once()
+
+        directory_list.action_pipe()
+        await pilot.pause()
+
+
+@pytest.mark.parametrize('option_id', ('..', 'loading-indicator'))
+async def test_directory_list_action_pipe_with_parent_or_loading_option_warns_instead(option_id):
+    directory_list = make_pipe_directory_list(
+        ('etc',), textual.widgets.option_list.Option('placeholder', id=option_id)
+    )
+
+    async with Directory_list_app(directory_list).run_test() as pilot:
+        directory_list.highlighted = 0
+        flexmock(module.borgmatic_browse.pipe).should_receive('pipe_file').never()
+        flexmock(directory_list).should_receive('notify').with_args(
+            'Only files can be piped to a command', severity='warning'
+        ).once()
+
+        directory_list.action_pipe()
+        await pilot.pause()
+
+
+async def test_directory_list_action_pipe_with_nothing_highlighted_warns_instead():
+    directory_list = make_pipe_directory_list(('etc',), make_option('foo', 'foo'))
+
+    async with Directory_list_app(directory_list).run_test() as pilot:
+        directory_list.highlighted = None
+        flexmock(module.borgmatic_browse.pipe).should_receive('pipe_file').never()
+        flexmock(directory_list).should_receive('notify').with_args(
+            'Only files can be piped to a command', severity='warning'
+        ).once()
+
+        directory_list.action_pipe()
+        await pilot.pause()
+
+
+async def test_directory_list_pressing_vertical_line_pipes_highlighted_file():
+    directory_list = make_pipe_directory_list(('etc',), make_option('x', 'foo.conf'))
+    calls = []
+    flexmock(module.borgmatic_browse.pipe).should_receive('pipe_file').replace_with(
+        lambda *args: calls.append(args)
+    )
+
+    async with Directory_list_app(directory_list).run_test() as pilot:
+        directory_list.focus()
+        directory_list.highlighted = 0
+        await pilot.pause()
+
+        await pilot.press('vertical_line')
+        await pilot.pause()
+
+        assert [call[-1] for call in calls] == ['etc/foo.conf']

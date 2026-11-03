@@ -334,6 +334,156 @@ def main():
         '(latest)',
         user_shell='/no/such/[shell]',
     )
+
+    def pipe_steps(config_label, file_index, command):
+        '''
+        Given a repository label for a configuration listing all archives with Borg 1, the index of a
+        file in the "tree/adir" directory listing, and a command, return steps for piping that file
+        to the command from the directory listing.
+        '''
+        return [
+            (config_label, '\r'),
+            (r'\(latest\)', 'j'),
+            (f'{host}-1', '\r'),
+            ('📁 tree', '\r'),
+            (r'hello\.py', 'j\r'),
+            (r'small\.bin', 'j' * file_index + '|'),
+            ('to:', f'{command}\r'),
+        ]
+
+    # The output window covers the listing, so wait for each command's output there, and then check
+    # that closing it leads back to the listing.
+    check(
+        'Piping a file to jq shows its output and exit status',
+        'borg1-all',
+        [
+            *pipe_steps('borg1all', 1, 'jq -C .name'),
+            (r'"smoke"[\s\S]*exit status 0', '\x1b'),
+            (r'small\.bin', 'q'),
+        ],
+        'data.json',
+    )
+    check(
+        'Piping a file streams all of it, past the preview limit',
+        'borg1-all',
+        [
+            *pipe_steps('borg1all', 2, 'wc -c'),
+            (r'3488895[\s\S]*exit status 0', '\x1b'),
+            (r'small\.bin', 'q'),
+        ],
+        'lines.txt',
+    )
+    check(
+        'A command that stops reading early is not an error',
+        'borg1-all',
+        [
+            *pipe_steps('borg1all', 2, 'head -n 2'),
+            (r'line 2[\s\S]*exit status 0', ''),
+            (r'^(?![\s\S]*Error piping)[\s\S]*exit status 0', '\x1b'),
+            (r'small\.bin', 'q'),
+        ],
+        'lines.txt',
+    )
+    check(
+        'Too much output is cut off and the command stopped',
+        'borg1-all',
+        [
+            *pipe_steps('borg1all', 2, 'yes'),
+            ('the command was stopped', '\x1b'),
+            (r'small\.bin', 'q'),
+        ],
+        'lines.txt',
+    )
+    check(
+        'A command that does not exist shows the shell error',
+        'borg1-all',
+        [
+            *pipe_steps('borg1all', 1, 'no-such-command'),
+            (r'not found[\s\S]*exit status 127', '\x1b'),
+            (r'small\.bin', 'q'),
+        ],
+        'data.json',
+    )
+    check(
+        'Closing a running command returns to the listing without an error',
+        'borg1-all',
+        [
+            *pipe_steps('borg1all', 2, 'sleep 30'),
+            ('loading', '\x1b'),
+            (r'^(?![\s\S]*sleep 30)[\s\S]*small\.bin', ''),
+            (r'^(?![\s\S]*Error piping)[\s\S]*small\.bin', 'q'),
+        ],
+        'lines.txt',
+    )
+    check(
+        'The prompt remembers the last command',
+        'borg1-all',
+        [
+            *pipe_steps('borg1all', 2, 'wc -l'),
+            (r'300000[\s\S]*exit status 0', '\x1b'),
+            (r'^(?![\s\S]*300000)[\s\S]*small\.bin', '|'),
+            ('wc -l', '\r'),
+            (r'300000[\s\S]*exit status 0', '\x1b'),
+            (r'^(?![\s\S]*300000)[\s\S]*small\.bin', 'q'),
+        ],
+        'lines.txt',
+    )
+    check(
+        'A directory cannot be piped',
+        'borg1-all',
+        [*pipe_steps('borg1all', 0, '')[:-2], (r'small\.bin', '|'), ('Only files', 'q')],
+        'Only files can be piped',
+    )
+    check(
+        'A file preview can be piped',
+        'borg1-all',
+        [
+            *long_file_steps(5),
+            ('hello smoke', '|'),
+            ('to:', 'tr a-z A-Z\r'),
+            (r'HELLO SMOKE[\s\S]*exit status 0', '\x1b'),
+            (r'^(?![\s\S]*HELLO SMOKE)[\s\S]*hello smoke', 'q'),
+        ],
+        'hello.py preview',
+    )
+    check(
+        'A binary file can be piped',
+        'borg1-all',
+        [
+            *long_file_steps(4),
+            ('Cannot display', '|'),
+            ('to:', 'wc -c\r'),
+            (r'2000[\s\S]*exit status 0', '\x1b'),
+            ('Cannot display', 'q'),
+        ],
+        'blob.bin preview',
+    )
+    check(
+        'Borg 2: a file can be piped',
+        'borg2',
+        [
+            ('borg2', '\r'),
+            (r'\(latest\)', '\r'),
+            ('📁 tree', '\r'),
+            (r'hello\.py', 'jjjjj|'),
+            ('to:', 'tail -n 1\r'),
+            (r'more[\s\S]*exit status 0', '\x1b'),
+            (r'small|hello\.py', 'q'),
+        ],
+        'hello.py',
+        base='base2',
+    )
+    check(
+        'Borg failing while piping shows an error',
+        'fail-extract',
+        [
+            *pipe_steps('fail-extract', 1, 'cat'),
+            (r'simulated extract failure[\s\S]*view the logs', '\x1b'),
+            (r'small\.bin', 'q'),
+        ],
+        'data.json',
+    )
+
     crash_code = (
         'import sys\n'
         'import borgmatic_browse.archive, borgmatic_browse.cli\n'

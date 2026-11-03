@@ -5,7 +5,9 @@ import rich.syntax
 import textual.binding
 import textual.widgets
 
+import borgmatic_browse.bindings
 import borgmatic_browse.loading
+import borgmatic_browse.pipe
 import borgmatic_browse.workers
 
 logger = logging.getLogger('__name__')
@@ -48,6 +50,7 @@ class File_preview(textual.widgets.RichLog):
             key='pagedown', action='page_down', description='page down', show=True, priority=True
         ),
         textual.binding.Binding(key='w', action='toggle_wrap', description='wrap', show=True),
+        borgmatic_browse.bindings.PIPE_BINDING,
     )
 
     def __init__(self, config, repository, archive_name, file_path, archive_label=None):
@@ -168,6 +171,14 @@ class File_preview(textual.widgets.RichLog):
 
         self.wrap = not self.wrap
         self.render_file_contents()
+
+    def action_pipe(self):
+        '''
+        Ask for a shell command and pipe the whole file to it, even if it couldn't be previewed.
+        '''
+        borgmatic_browse.pipe.pipe_file(
+            self.app, self.config, self.repository, self.archive_name, self.file_path
+        )
 
     def on_resize(self, event):
         '''

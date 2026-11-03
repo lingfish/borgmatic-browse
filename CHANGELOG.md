@@ -5,6 +5,11 @@ versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+
+* #11: Press `|` on a file, or in a file preview, to pipe the whole file to a command like `jq .` and see
+  its output and exit status in a window. The prompt remembers the commands you've used until you quit.
+
 ## 0.6.0 - 2026-11-03
 
 ### Added

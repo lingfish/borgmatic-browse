@@ -570,6 +570,47 @@ def test_report_loading_error_notifies_with_literal_message_and_markup_disabled(
     ]
 
 
+def test_report_loading_error_returns_the_message_it_logged_and_notified():
+    notifications = []
+    flexmock(module.logger).should_receive('error')
+
+    message = module.report_loading_error(
+        make_capturing_browse_app(notifications),
+        'Error listing repository',
+        subprocess.CalledProcessError(13, 'borg list', output='Repository /x does not exist.'),
+        {},
+    )
+
+    assert message == 'Error listing repository: Repository /x does not exist.'
+    assert notifications == [(message, 'error')]
+
+
+def test_report_loading_error_without_output_returns_message_with_exception_text():
+    flexmock(module.logger).should_receive('error')
+
+    message = module.report_loading_error(
+        flexmock(notify=lambda *args, **kwargs: None),
+        'Error piping foo to a command',
+        OSError('no such file'),
+        {},
+    )
+
+    assert message == 'Error piping foo to a command: no such file'
+
+
+def test_report_loading_error_with_empty_passphrase_returns_substituted_message():
+    flexmock(module.logger).should_receive('error')
+
+    message = module.report_loading_error(
+        flexmock(notify=lambda *args, **kwargs: None),
+        'Error listing repository',
+        subprocess.CalledProcessError(52, 'borg list', output=BORG_PASSPHRASE_ERROR),
+        {'encryption_passphrase': ''},
+    )
+
+    assert message == f'Error listing repository: {module.NO_PASSPHRASE_MESSAGE}'
+
+
 def test_no_passphrase_message_mentions_the_configuration_option():
     assert 'encryption_passphrase' in module.NO_PASSPHRASE_MESSAGE
 
@@ -840,3 +881,180 @@ def test_load_file_preview_without_failure_leaves_signal_not_failed():
 
     assert file_preview_loaded.failed is False
     assert published == [('hi', False)]
+
+
+# Issue #11: piping a file to a command.
+
+
+def test_command_output_loaded_defaults():
+    assert module.Command_output_loaded.failed is False
+    assert module.Command_output_loaded.cancelled is False
+    assert module.Command_output_loaded.processes == ()
+    assert module.Command_output_loaded.error_message is None
+
+
+def make_command_output_loaded():
+    return flexmock(failed=False, cancelled=False, processes=(), error_message=None)
+
+
+def test_pipe_file_publishes_command_result():
+    result = flexmock()
+    flexmock(module.borgmatic_browse.archive).should_receive('pipe_archive_file').and_return(result)
+    command_output_loaded = make_command_output_loaded()
+    command_output_loaded.should_receive('publish').with_args(result).once()
+
+    module.pipe_file.__wrapped__(
+        browse_app=flexmock(),
+        command_output_loaded=command_output_loaded,
+        config=flexmock(),
+        repository=flexmock(),
+        archive_name='archive',
+        file_path='foo/bar/baz.txt',
+        command='jq .',
+    )
+
+
+def test_pipe_file_passes_arguments_to_pipe_archive_file_with_on_start_callback():
+    config = flexmock()
+    repository = flexmock()
+    captured = {}
+
+    def pipe_archive_file(*args, **kwargs):
+        captured['args'] = args
+        captured['on_start'] = kwargs.pop('on_start')
+        captured['kwargs'] = kwargs
+
+        return flexmock()
+
+    flexmock(module.borgmatic_browse.archive).should_receive('pipe_archive_file').replace_with(
+        pipe_archive_file
+    )
+    command_output_loaded = make_command_output_loaded()
+    command_output_loaded.should_receive('publish')
+
+    module.pipe_file.__wrapped__(
+        browse_app=flexmock(),
+        command_output_loaded=command_output_loaded,
+        config=config,
+        repository=repository,
+        archive_name='archive',
+        file_path='foo/bar/baz.txt',
+        command='jq .',
+    )
+
+    assert captured['args'] == (config, repository, 'archive', 'foo/bar/baz.txt', 'jq .')
+    assert captured['kwargs'] == {}
+    assert callable(captured['on_start'])
+
+
+def test_pipe_file_on_start_records_processes_without_stopping_them():
+    processes = (flexmock(), flexmock())
+    flexmock(module.borgmatic_browse.archive).should_receive('stop_processes').never()
+
+    def pipe_archive_file(*args, on_start, **kwargs):
+        on_start(*processes)
+
+        return flexmock()
+
+    flexmock(module.borgmatic_browse.archive).should_receive('pipe_archive_file').replace_with(
+        pipe_archive_file
+    )
+    command_output_loaded = make_command_output_loaded()
+    command_output_loaded.should_receive('publish')
+
+    module.pipe_file.__wrapped__(
+        browse_app=flexmock(),
+        command_output_loaded=command_output_loaded,
+        config=flexmock(),
+        repository=flexmock(),
+        archive_name='archive',
+        file_path='foo.txt',
+        command='cat',
+    )
+
+    assert command_output_loaded.processes == processes
+
+
+def test_pipe_file_on_start_stops_processes_right_away_if_already_cancelled():
+    processes = (flexmock(), flexmock())
+    flexmock(module.borgmatic_browse.archive).should_receive('stop_processes').with_args(
+        *processes
+    ).once()
+
+    def pipe_archive_file(*args, on_start, **kwargs):
+        on_start(*processes)
+
+        return flexmock()
+
+    flexmock(module.borgmatic_browse.archive).should_receive('pipe_archive_file').replace_with(
+        pipe_archive_file
+    )
+    command_output_loaded = make_command_output_loaded()
+    command_output_loaded.cancelled = True
+    command_output_loaded.should_receive('publish')
+
+    module.pipe_file.__wrapped__(
+        browse_app=flexmock(),
+        command_output_loaded=command_output_loaded,
+        config=flexmock(),
+        repository=flexmock(),
+        archive_name='archive',
+        file_path='foo.txt',
+        command='cat',
+    )
+
+    assert command_output_loaded.processes == processes
+
+
+@pytest.mark.parametrize('error', FAILURES)
+def test_pipe_file_with_failure_reports_error_and_publishes_loading_failed(error):
+    config = {}
+    browse_app = flexmock()
+    flexmock(module.borgmatic_browse.archive).should_receive('pipe_archive_file').and_raise(error)
+    flexmock(module).should_receive('report_loading_error').with_args(
+        browse_app, 'Error piping foo/bar/baz.txt to a command', error, config
+    ).and_return('Error piping foo/bar/baz.txt to a command: the detail').once()
+    command_output_loaded = make_command_output_loaded()
+    seen_error_messages = []
+    command_output_loaded.should_receive('publish').with_args(module.LOADING_FAILED).replace_with(
+        lambda data: seen_error_messages.append(command_output_loaded.error_message)
+    ).once()
+
+    module.pipe_file.__wrapped__(
+        browse_app=browse_app,
+        command_output_loaded=command_output_loaded,
+        config=config,
+        repository=flexmock(),
+        archive_name='archive',
+        file_path='foo/bar/baz.txt',
+        command='jq .',
+    )
+
+    assert command_output_loaded.failed is True
+    assert command_output_loaded.error_message == (
+        'Error piping foo/bar/baz.txt to a command: the detail'
+    )
+    # The error message is set before the failure is published, so subscribers can show it.
+    assert seen_error_messages == ['Error piping foo/bar/baz.txt to a command: the detail']
+
+
+@pytest.mark.parametrize('error', FAILURES)
+def test_pipe_file_with_failure_after_cancelling_publishes_loading_failed_without_reporting(error):
+    flexmock(module.borgmatic_browse.archive).should_receive('pipe_archive_file').and_raise(error)
+    flexmock(module).should_receive('report_loading_error').never()
+    command_output_loaded = make_command_output_loaded()
+    command_output_loaded.cancelled = True
+    command_output_loaded.should_receive('publish').with_args(module.LOADING_FAILED).once()
+
+    module.pipe_file.__wrapped__(
+        browse_app=flexmock(),
+        command_output_loaded=command_output_loaded,
+        config={},
+        repository=flexmock(),
+        archive_name='archive',
+        file_path='foo/bar/baz.txt',
+        command='jq .',
+    )
+
+    assert command_output_loaded.failed is True
+    assert command_output_loaded.error_message is None

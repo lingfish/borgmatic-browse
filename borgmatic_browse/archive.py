@@ -1,8 +1,13 @@
 import argparse
 import collections
+import contextlib
 import enum
 import json
 import logging
+import os
+import signal
+import subprocess
+import threading
 
 import binaryornot.helpers
 import borgmatic.borg.extract
@@ -132,6 +137,30 @@ MAXIMUM_TOTAL_READ_SIZE = 100000
 TRUNCATION_MESSAGE = '[... truncated for display ...]'
 
 
+def extract_file_to_stdout(config, repository, archive_name, file_path):
+    '''
+    Given a configuration dict, a repository dict, an archive name in that repository, and a file
+    path in that archive, start extracting the file to standard output, and return the Borg process.
+    The caller is responsible for reading both its stdout and stderr.
+    '''
+    local_path = config.get('local_path', 'borg')
+
+    return borgmatic.borg.extract.extract_archive(
+        dry_run=False,
+        repository=repository['path'],
+        archive=archive_name,
+        paths=(file_path,),
+        config=config,
+        local_borg_version=borgmatic.borg.version.local_borg_version(config, local_path),
+        global_arguments=argparse.Namespace(),
+        local_path=local_path,
+        remote_path=config.get('remote_path'),
+        destination_path=None,
+        strip_components=None,
+        extract_to_stdout=True,
+    )
+
+
 def get_archive_file_content(config, repository, archive_name, file_path):
     '''
     Given a configuration dict, a repository dict, an archive name in that repository, and a file
@@ -143,22 +172,7 @@ def get_archive_file_content(config, repository, archive_name, file_path):
     with borgmatic.logger.Log_prefix(repository.get('label', repository['path'])):
         logger.info(f'Getting archive content of file {file_path}')
         local_path = config.get('local_path', 'borg')
-        remote_path = config.get('remote_path')
-
-        extract_process = borgmatic.borg.extract.extract_archive(
-            dry_run=False,
-            repository=repository['path'],
-            archive=archive_name,
-            paths=(file_path,),
-            config=config,
-            local_borg_version=borgmatic.borg.version.local_borg_version(config, local_path),
-            global_arguments=argparse.Namespace(),
-            local_path=local_path,
-            remote_path=remote_path,
-            destination_path=None,
-            strip_components=None,
-            extract_to_stdout=True,
-        )
+        extract_process = extract_file_to_stdout(config, repository, archive_name, file_path)
 
         chunks = []
         read_bytes_count = 0
@@ -199,3 +213,115 @@ def get_archive_file_content(config, repository, archive_name, file_path):
             )
         except UnicodeDecodeError:
             return None
+
+
+# How much of a command's output to keep, and the shell to run the command with.
+MAXIMUM_COMMAND_OUTPUT_SIZE = 1000000
+COMMAND_OUTPUT_CHUNK_SIZE = 65536
+PIPE_SHELL = '/bin/sh'
+
+# What Borg's error says when the command that its output is piped to stops reading early, as "head"
+# does. Borg 1 and 2 both fail with a traceback containing this.
+BROKEN_PIPE_TEXT = 'BrokenPipeError'
+
+# The result of piping a file to a command: its combined stdout and stderr as bytes, its exit code
+# (negative if a signal stopped it), and whether its output was cut off.
+Command_result = collections.namedtuple('Command_result', ('output', 'exit_code', 'truncated'))
+
+
+def stop_processes(extract_process, command_process):
+    '''
+    Given a Borg extract process and the process of a command reading from it, stop both. Signal the
+    command's whole process group, so that every command in a pipeline like "jq . | head" stops too.
+    Ignore an error signalling it, e.g. because it has already exited.
+    '''
+    if extract_process.poll() is None:
+        extract_process.terminate()
+
+    with contextlib.suppress(OSError):
+        os.killpg(command_process.pid, signal.SIGTERM)
+
+
+def pipe_archive_file(config, repository, archive_name, file_path, command, on_start=None):
+    '''
+    Given a configuration dict, a repository dict, an archive name in that repository, a file path
+    in that archive, a shell command, and an optional function to call with the extract and command
+    processes once they've started, stream the whole file into the command, and return its output
+    as a Command_result.
+
+    Run the command in a new session, so that it can't take over the terminal that the app runs in
+    and can be stopped along with any commands it starts. Read its output in a separate thread,
+    so that Borg's stderr can be logged at the same time. If there's too much output, cut it off
+    and stop both processes.
+
+    Ignore Borg failing because the command stopped reading, or because it was stopped here.
+    Otherwise raise subprocess.CalledProcessError if Borg fails, or OSError if the command can't
+    be started.
+    '''
+    with borgmatic.logger.Log_prefix(repository.get('label', repository['path'])):
+        logger.info(f'Piping file {file_path} to command: {command}')
+        local_path = config.get('local_path', 'borg')
+        extract_process = extract_file_to_stdout(config, repository, archive_name, file_path)
+
+        try:
+            command_process = subprocess.Popen(  # noqa: S603
+                (PIPE_SHELL, '-c', command),
+                stdin=extract_process.stdout,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        except OSError:
+            extract_process.terminate()
+            raise
+
+        # Only the command should hold the read end of the pipe, so Borg finds out if it exits.
+        extract_process.stdout.close()
+
+        if on_start:
+            on_start(extract_process, command_process)
+
+        chunks = []
+        truncated = False
+
+        def read_output():
+            nonlocal truncated
+            read_bytes_count = 0
+
+            while chunk := command_process.stdout.read(COMMAND_OUTPUT_CHUNK_SIZE):
+                chunks.append(chunk)
+                read_bytes_count += len(chunk)
+
+                if read_bytes_count > MAXIMUM_COMMAND_OUTPUT_SIZE:
+                    truncated = True
+                    stop_processes(extract_process, command_process)
+                    break
+
+        reader = threading.Thread(target=read_output, daemon=True)
+        reader.start()
+
+        try:
+            for _ in borgmatic.execute.log_outputs(
+                processes=(extract_process,),
+                exclude_stdouts=(extract_process.stdout,),
+                output_log_level=None,
+                borg_local_path=local_path,
+                borg_exit_codes=config.get('borg_exit_codes'),
+            ):
+                pass
+        except subprocess.CalledProcessError as error:
+            # Cutting off the output flags it before stopping Borg, so there's no need to wait for
+            # the reader here. That could take forever with a command that doesn't read its input.
+            if not truncated and BROKEN_PIPE_TEXT not in (error.output or ''):
+                stop_processes(extract_process, command_process)
+                reader.join()
+                raise
+
+            logger.debug(f'Ignoring Borg failing after the command stopped reading: {error}')
+
+        reader.join()
+        command_process.wait()
+
+        return Command_result(
+            b''.join(chunks)[:MAXIMUM_COMMAND_OUTPUT_SIZE], command_process.returncode, truncated
+        )

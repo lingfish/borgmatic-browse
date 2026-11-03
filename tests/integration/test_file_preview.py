@@ -434,3 +434,40 @@ async def test_file_preview_toggling_wrap_on_while_scrolled_right_resets_horizon
 
         assert 'word0' in rendered_words(preview)
         assert preview.scroll_x == 0
+
+
+# Issue #11: piping a file to a command.
+
+
+def test_file_preview_has_visible_pipe_binding():
+    bindings = [
+        binding
+        for binding in module.File_preview.BINDINGS
+        if isinstance(binding, textual.binding.Binding) and binding.key == 'vertical_line'
+    ]
+
+    assert len(bindings) == 1
+    assert bindings[0].action == 'pipe'
+    assert bindings[0].description == 'pipe'
+    assert bindings[0].key_display == '|'
+    assert bindings[0].show is True
+
+
+@pytest.mark.parametrize('contents', ('some text', None, NOT_LOADED))
+async def test_file_preview_action_pipe_pipes_file_whether_or_not_preview_loaded(contents):
+    async with running_preview(contents) as (app, _pilot, preview):
+        flexmock(module.borgmatic_browse.pipe).should_receive('pipe_file').with_args(
+            app, preview.config, preview.repository, 'archive', 'foo.txt'
+        ).once()
+
+        preview.action_pipe()
+
+
+async def test_file_preview_pressing_vertical_line_pipes_file():
+    async with running_preview('some text') as (app, pilot, preview):
+        flexmock(module.borgmatic_browse.pipe).should_receive('pipe_file').with_args(
+            app, preview.config, preview.repository, 'archive', 'foo.txt'
+        ).once()
+
+        await pilot.press('vertical_line')
+        await pilot.pause()

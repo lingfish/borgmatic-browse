@@ -102,6 +102,7 @@ class Browse_app(textual.app.App):
 
     def __init__(self, configs):
         self.configs = configs
+        self.command_history = []
 
         super().__init__()
 

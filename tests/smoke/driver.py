@@ -47,11 +47,24 @@ class Result:
         return bool(re.search(r'Traceback|WorkerFailed', f'{self.tail}{self.final}'))
 
 
+def get_display(screen):
+    '''
+    Given a pyte.Screen, return its lines as a list of strings, like its "display" attribute.
+
+    Don't use that attribute, because it raises IndexError when a narrow character has overwritten
+    the first half of a wide one, like an emoji, leaving an empty second half behind.
+    '''
+    return [
+        ''.join(screen.buffer[line][column].data for column in range(screen.columns))
+        for line in range(screen.lines)
+    ]
+
+
 def get_screen_text(screen):
     '''
     Given a pyte.Screen, return its non-blank lines as a string.
     '''
-    return '\n'.join(line.rstrip() for line in screen.display if line.strip())
+    return '\n'.join(line.rstrip() for line in get_display(screen) if line.strip())
 
 
 def run(command, steps=(), timeout=25, environment=None):
@@ -105,11 +118,11 @@ def run(command, steps=(), timeout=25, environment=None):
         while (
             alive
             and time.monotonic() < end_time
-            and not re.search(wait_pattern, '\n'.join(screen.display))
+            and not re.search(wait_pattern, '\n'.join(get_display(screen)))
         ):
             alive = read_output(0.1)
 
-        if not re.search(wait_pattern, '\n'.join(screen.display)):
+        if not re.search(wait_pattern, '\n'.join(get_display(screen))):
             failed = f'Timed out waiting for {wait_pattern!r}'
             break
 

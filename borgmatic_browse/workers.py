@@ -34,7 +34,7 @@ def report_loading_error(browse_app, description, error, config):
     '''
     Given a running Browse_app instance, a description of what failed, the exception raised, and a
     configuration dict, log the error and show it as a notification, so the user finds out why
-    loading stopped. Prefer a failed command's own output over the exception's text, since the output
+    loading stopped. Return the message. Prefer a failed command's own output over the exception's text, since the output
     says what went wrong rather than just which command failed.
 
     If Borg rejected an empty passphrase, say that no passphrase is configured, as Borg's error
@@ -52,6 +52,8 @@ def report_loading_error(browse_app, description, error, config):
 
     logger.error(message)
     browse_app.notify(message, severity='error', markup=False)
+
+    return message
 
 
 class Directory(dict):
@@ -360,3 +362,69 @@ def load_file_preview(
         return
 
     file_preview_loaded.publish(file_contents)
+
+
+class Command_output_loaded(textual.signal.Signal):
+    '''
+    A signal that publishes when a command that a file was piped to finishes, intended for
+    consumption in the widget that displays the command's output. Each published callback includes
+    a Command_result instance, or LOADING_FAILED if Borg failed or the command couldn't be run.
+    There should be a separate Command_output_loaded instance per command run.
+
+    The "failed" attribute records whether running the command failed, "error_message" what went
+    wrong, "cancelled" whether the user stopped waiting for it, and "processes" the extract and
+    command processes once they've started.
+    '''
+
+    failed = False
+    error_message = None
+    cancelled = False
+    processes = ()
+
+
+@textual.work(thread=True)
+def pipe_file(
+    browse_app,
+    command_output_loaded,
+    config,
+    repository,
+    archive_name,
+    file_path,
+    command,
+):
+    '''
+    Given a running Browse_app instance, a Command_output_loaded instance, a configuration dict, a
+    repository dict, an archive name, the path of a file in that archive, and a shell command, pipe
+    the file to the command and publish the command's result. Record the processes on the signal as
+    soon as they start, so that they can be stopped, and stop them straight away if the user has
+    already stopped waiting.
+
+    If piping fails, publish a loading failed signal instead, and report the error and record its
+    message on the signal, unless the user stopped waiting, since stopping the processes is what
+    made it fail. Record the message because a notification can't be seen over the output window.
+
+    This function runs in a separate thread from the main UI.
+    '''
+
+    def on_start(*processes):
+        command_output_loaded.processes = processes
+
+        if command_output_loaded.cancelled:
+            borgmatic_browse.archive.stop_processes(*processes)
+
+    try:
+        result = borgmatic_browse.archive.pipe_archive_file(
+            config, repository, archive_name, file_path, command, on_start=on_start
+        )
+    except LOADING_ERRORS as error:
+        command_output_loaded.failed = True
+
+        if not command_output_loaded.cancelled:
+            command_output_loaded.error_message = report_loading_error(
+                browse_app, f'Error piping {file_path} to a command', error, config
+            )
+
+        command_output_loaded.publish(LOADING_FAILED)
+        return
+
+    command_output_loaded.publish(result)

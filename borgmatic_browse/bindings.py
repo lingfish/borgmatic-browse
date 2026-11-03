@@ -21,6 +21,10 @@ OPTION_LIST_BINDINGS = (
     textual.binding.Binding(key='right,l', action='select', description='select', show=False),
 )
 
+PIPE_BINDING = textual.binding.Binding(
+    key='vertical_line', action='pipe', description='pipe', key_display='|'
+)
+
 SORTABLE_BINDINGS = (
     textual.binding.Binding(key='s', action='cycle_sort', description='sort'),
     textual.binding.Binding(key='r', action='reverse_sort', description='reverse'),

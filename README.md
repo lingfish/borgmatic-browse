@@ -80,6 +80,13 @@ your `~/.bashrc` or `~/.zshrc`, after your prompt is set:
 PS1="${BORGMATIC_BROWSE_SHELL:+(browse) }$PS1"
 ```
 
+Press `|` on a file in a list of paths, or in a file preview, to pipe the whole file to a command, like
+`jq .` or `wc -l`. The command runs with `/bin/sh`, so pipelines like `jq . | head` work too. Its output
+and errors show in a window along with its exit status, and ANSI colours are shown, as from `jq -C .`.
+Output over 1,000,000 bytes is cut off and the command stopped. Press `Escape` or `q` to close the
+window, which also stops a command that's still running. The prompt starts with the last command you
+used, and `↑` and `↓` go through earlier ones, but they're forgotten when you quit.
+
 The exit status is 0 after quitting normally, even if a Borg error was shown along the way, and
 non-zero if the configuration can't be loaded or the app crashes.
 
@@ -125,6 +132,8 @@ borg list --format '{type} {mtime} {path}{NL}' REPOSITORY::ARCHIVE | grep -E ' m
 * If SSH needs a password or a host key confirmation for a remote repository, it may prompt on the
   terminal underneath the UI, and the app may get stuck and not respond to `q`. Use key-based
   authentication with a known host.
+* Commands that need a terminal, like `less` or `vim`, don't work with `|`, because a command's
+  output goes to a window rather than the terminal.
 * If `SHELL` is set to a program that isn't an interactive shell, pressing Ctrl-C in it quits the app
   too, because only interactive shells take the terminal's Ctrl-C for themselves.
 * If the app is killed from outside, such as with a SIGTERM, it doesn't restore the terminal or

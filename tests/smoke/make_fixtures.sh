@@ -52,6 +52,9 @@ head -c 2000 /dev/urandom > source/tree/blob.bin
 python3 -c "print('LONGSTART ' + 'word ' * 100 + 'LONGEND')" > source/tree/long.txt
 python3 -c "print('HUGESTART ' + 'word ' * 1000 + 'HUGEEND')" > source/tree/huge.txt
 ln -s hello.py source/tree/lnk
+# Files for piping to commands: JSON for jq, and text well over the preview's 100 kB limit.
+printf '{"name": "smoke", "items": [1, 2]}\n' > source/tree/adir/data.json
+python3 -c "print('\n'.join(f'line {i}' for i in range(1, 300001)))" > source/tree/adir/lines.txt
 echo x > source/implicit/a/b/c.txt
 touch -d '2020-01-01 10:00' source/tree/old.txt source/tree/adir/small.bin source/tree/adir
 touch -d '2026-03-03 03:03' source/tree/Newer.txt source/tree/zdir/big.bin

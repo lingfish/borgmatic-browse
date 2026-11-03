@@ -7,6 +7,7 @@ import borgmatic_browse.archive
 import borgmatic_browse.bindings
 import borgmatic_browse.icons
 import borgmatic_browse.loading
+import borgmatic_browse.pipe
 import borgmatic_browse.sizes
 import borgmatic_browse.sorting
 import borgmatic_browse.times
@@ -240,6 +241,7 @@ class Directory_list(borgmatic_browse.sorting.Sortable, textual.widgets.OptionLi
     BINDINGS = (
         *borgmatic_browse.bindings.OPTION_LIST_BINDINGS,
         *borgmatic_browse.bindings.SORTABLE_BINDINGS,
+        borgmatic_browse.bindings.PIPE_BINDING,
     )
     SORT_MODES = ('name', 'size', 'time')
     DEFAULT_SORT_MODE = 'name'
@@ -420,3 +422,22 @@ class Directory_list(borgmatic_browse.sorting.Sortable, textual.widgets.OptionLi
         '''
         if self.highlighted not in {None, 0}:
             self.highlighted_option_changed = True
+
+    def action_pipe(self):
+        '''
+        If the highlighted option is a file, ask for a shell command and pipe the file to it.
+        Otherwise, say that only files can be piped.
+        '''
+        option = self.highlighted_option
+
+        if getattr(option, 'path_type', None) != borgmatic_browse.archive.Path_type.FILE.value:
+            self.notify('Only files can be piped to a command', severity='warning')
+            return
+
+        borgmatic_browse.pipe.pipe_file(
+            self.app,
+            self.config,
+            self.repository,
+            self.archive_name,
+            os.path.sep.join((*self.path_components, option.id)),
+        )
