@@ -5,6 +5,8 @@ versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.7.0 - 2026-11-03
+
 ### Added
 
 * #11: Press `|` on a file, or in a file preview, to pipe the whole file to a command like `jq .` and see
