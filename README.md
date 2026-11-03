@@ -73,6 +73,9 @@ wrap. Without it, long lines scroll sideways with `→` and `←`, and are cut o
 The exit status is 0 after quitting normally, even if a Borg error was shown along the way, and
 non-zero if the configuration can't be loaded or the app crashes.
 
+See [CHANGELOG.md](https://github.com/lingfish/borgmatic-browse/blob/main/CHANGELOG.md) for what's
+changed in each version.
+
 ## Why some directories show `<no dir entry>`
 
 `<no dir entry>` in the time column means the archive has no entry for that directory, even though
@@ -138,15 +141,17 @@ Versions follow [semantic versioning](https://semver.org/): MAJOR.MINOR.PATCH, w
 prefix. While the major version is 0, a minor version bump may include breaking changes, such as a
 new borgmatic version requirement.
 
-The package version comes from git tags, via hatch-vcs. To release, tag a commit on `main` and
-push the tag:
+The package version comes from git tags, via hatch-vcs. To release, rename the `Unreleased` section
+of `CHANGELOG.md` to the new version and date, add a new empty `Unreleased` section above it, and
+commit that. Then tag the commit on `main` and push the tag:
 
 ```bash
 git tag 0.1.0
 git push origin 0.1.0
 ```
 
-The release workflow in GitHub Actions then builds the sdist and wheel and publishes them to PyPI
-using trusted publishing, so no API tokens are involved. Running the same workflow by hand from
+The release workflow in GitHub Actions then checks that the changelog has notes for that version,
+builds the sdist and wheel, and publishes them to PyPI using trusted publishing, so no API tokens
+are involved. It then creates a GitHub release from those notes. Running the same workflow by hand from
 the Actions tab publishes a development version to TestPyPI instead, which is a way to exercise
 the pipeline without releasing.

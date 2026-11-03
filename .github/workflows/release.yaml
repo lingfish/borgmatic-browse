@@ -18,6 +18,10 @@ jobs:
         with:
           # hatch-vcs derives the package version from git tags.
           fetch-depth: 0
+      # Fail before anything gets published if the changelog has no notes for this version.
+      - name: Check the changelog
+        if: github.ref_type == 'tag'
+        run: .github/scripts/get_changelog_section.sh "$GITHUB_REF_NAME"
       # setup-uv publishes no floating major version tag, so pin the full version.
       - uses: astral-sh/setup-uv@v10.3.3
       - name: Build sdist and wheel
@@ -63,3 +67,20 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      # Required for creating a release.
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Create a GitHub release from the changelog
+        # Setting the shell explicitly turns on pipefail.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          .github/scripts/get_changelog_section.sh "$GITHUB_REF_NAME" |
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file -

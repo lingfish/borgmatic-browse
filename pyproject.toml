@@ -24,6 +24,7 @@ dependencies = [
 Homepage = "https://github.com/lingfish/borgmatic-browse"
 Source = "https://github.com/lingfish/borgmatic-browse"
 Issues = "https://github.com/lingfish/borgmatic-browse/issues"
+Changelog = "https://github.com/lingfish/borgmatic-browse/blob/main/CHANGELOG.md"
 
 [project.scripts]
 borgmatic-browse = "borgmatic_browse.cli:main"
@@ -60,7 +61,15 @@ local_scheme = "no-local-version"
 packages = ["borgmatic_browse"]
 
 [tool.hatch.build.targets.sdist]
-include = ["borgmatic_browse", "tests", "LICENSE", "README.md", "pyproject.toml"]
+include = [
+    "borgmatic_browse",
+    "tests",
+    ".github/scripts",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md",
+    "pyproject.toml",
+]
 
 [tool.pytest.ini_options]
 testpaths = "tests"

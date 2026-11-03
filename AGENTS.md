@@ -14,6 +14,9 @@ it. See `README.md` for what it does and its known issues.
   failing tests and doesn't touch `borgmatic_browse/`. Check that they fail because the behaviour is
   missing, then implement the fix. Give it the full context, since it starts fresh.
 * **File a GitHub issue before fixing a bug** if there isn't one, and use `Fixes #N` in the commit.
+* **Add user-visible changes to `CHANGELOG.md` under `Unreleased`, in the same commit as the change.** Use
+  the `Added`, `Changed` and `Fixed` headings, write for users rather than developers, and start with the
+  issue number if there is one, like `#12: `. Leave out internal changes like tests and CI.
 * **Check behaviour against real Borg, not only mocks.** Mocked tests have missed real bugs here. Use
   the smoke harness below, and say plainly what you didn't test.
 * **Don't use `sudo`.** The user's Borg is in `/root/.local/bin` and their configuration files in
@@ -71,6 +74,11 @@ Rich's escaping doesn't match how Textual parses markup.
 ## Releasing
 
 Follow semantic versioning, with tags like `0.3.0` and no `v` prefix. The version comes from the tag.
-Wait for CI to pass on the commit, then push the tag. The release workflow publishes to PyPI. Afterwards
-check a fresh `pipx install`, which can briefly get the old version straight after publishing, and
-create a GitHub release.
+
+Compare `git log <last tag>..` against `Unreleased` in `CHANGELOG.md` and fill any gaps, since commits made
+outside a session may not have added an entry. Rename `Unreleased` to `## 0.3.0 - YYYY-MM-DD`, add a new
+empty `## Unreleased` above it, and commit that.
+
+Wait for CI to pass on the commit, then push the tag. The release workflow fails if the changelog has no
+notes for the version, publishes to PyPI, and creates a GitHub release from those notes. Afterwards check
+a fresh `pipx install`, which can briefly get the old version straight after publishing.
